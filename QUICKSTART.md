@@ -83,11 +83,15 @@ Open Raycast and type:
 
 ## Pro Tips
 
-1. **Keyboard shortcuts:** In Raycast, right-click each command and assign a hotkey
-2. **Display order:** Run this in Hammerspoon Console to see your display numbers:
+1. **Automatic unplugging:** By default, Hammerspoon detects when you unplug and automatically runs EOD actions (ejects Time Machine, consolidates windows). Just unplug and go! Disable by setting `config.autoEODOnUnplug = false` in your config.
+
+2. **Keyboard shortcuts:** In Raycast, right-click each command and assign a hotkey for even faster access
+
+3. **Display order:** Run this in Hammerspoon Console to see your display numbers:
    ```lua
    for i, screen in ipairs(hs.screen.allScreens()) do print(i, screen:name()) end
    ```
-3. **Testing layouts:** Use Hammerspoon Console to test functions directly before creating new Raycast commands
+
+4. **Testing layouts:** Use Hammerspoon Console to test functions directly before creating new Raycast commands
 
 Enjoy your automated workspace! 🚀

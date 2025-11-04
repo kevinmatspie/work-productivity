@@ -7,6 +7,12 @@ local config = {}
 -- This will be ejected during the "eod" command
 config.timeMachineDisk = "Time Machine"
 
+-- Automatic EOD on unplug
+-- When set to true, automatically runs EOD actions when you unplug from docking station
+-- (ejects Time Machine disk and moves all windows to laptop screen)
+-- Set to false if you prefer to manually trigger EOD via Raycast
+config.autoEODOnUnplug = true
+
 -- Work Layout (3 displays)
 -- Display numbering: 1 = laptop, 2 = first external, 3 = second external
 -- Position options: "maximized", "left-half", "right-half", "top-half", "bottom-half", "center", or nil

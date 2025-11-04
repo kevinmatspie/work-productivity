@@ -15,6 +15,7 @@ This system uses **Hammerspoon** (window management automation) + **Raycast** (l
 ✅ Move windows between physical displays
 ✅ Resize and position windows (maximized, left-half, right-half, etc.)
 ✅ Detect display configuration automatically
+✅ **Automatic EOD when unplugging** - Detects when you unplug and automatically consolidates windows
 ✅ Safely eject Time Machine disk before unplugging
 ✅ Fast one-command setup via Raycast
 ⚠️ Does NOT move windows between Mission Control Spaces (relies on macOS to remember)
@@ -112,19 +113,29 @@ chmod +x ~/Library/Application\ Support/raycast/scripts/*.sh
    - 🏠 **Home Display Setup**
    - 🌙 **End of Day Setup**
 
-### 5. Configure Time Machine Disk (Optional)
+### 5. Configure Automatic Behavior (Optional)
 
-If you use Time Machine and want it ejected during "End of Day":
+Open `~/.hammerspoon/display-profiles.lua` to customize:
 
-1. Open `~/.hammerspoon/display-profiles.lua`
-2. Set the disk name:
-   ```lua
-   config.timeMachineDisk = "Time Machine"  -- Use your actual disk name
-   ```
-3. To find your disk name, run in Terminal:
-   ```bash
-   diskutil list
-   ```
+**Automatic EOD on Unplug** (default: enabled)
+```lua
+config.autoEODOnUnplug = true  -- Set to false for manual-only mode
+```
+
+When enabled, Hammerspoon automatically detects when you unplug from your docking station and:
+- Ejects Time Machine disk (if configured)
+- Moves all windows to laptop screen
+- Shows completion notification
+
+**Time Machine Disk** (optional)
+```lua
+config.timeMachineDisk = "Time Machine"  -- Use your actual disk name, or nil to disable
+```
+
+To find your disk name, run in Terminal:
+```bash
+diskutil list
+```
 
 ## Usage
 
@@ -178,10 +189,16 @@ While Hammerspoon cannot move windows between Mission Control Spaces, macOS does
 4. Windows arrange across 2 displays
 
 **End of Day:**
+
+*With automatic EOD enabled (default):*
+1. Just unplug from docking station
+2. Hammerspoon automatically detects and consolidates windows
+3. You'll see a notification when it's done
+
+*Manual mode (if autoEODOnUnplug is disabled):*
 1. Open Raycast → type "eod" → Enter
 2. Wait for notification "Safe to unplug!"
 3. Unplug from docking station
-4. Windows are now on laptop screen
 
 ### Troubleshooting
 

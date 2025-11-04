@@ -203,9 +203,45 @@ function arrangeForEOD()
     log(string.format("EOD arrangement complete: %d windows moved to primary display", moved))
 end
 
+-- Screen Watcher for Automatic Unplug Detection
+local screenWatcher = nil
+local previousDisplayCount = getDisplayCount()
+
+local function handleDisplayChange()
+    local currentDisplayCount = getDisplayCount()
+
+    log(string.format("Display change detected: %d -> %d displays", previousDisplayCount, currentDisplayCount))
+
+    -- Check if we've unplugged (display count decreased)
+    if currentDisplayCount < previousDisplayCount then
+        -- Only trigger if we're going down to just the laptop screen
+        -- and the feature is enabled in config
+        if currentDisplayCount == 1 and userConfig.autoEODOnUnplug then
+            log("Unplugging detected - triggering automatic EOD")
+
+            -- Small delay to let macOS finish display changes
+            hs.timer.doAfter(1, function()
+                arrangeForEOD()
+            end)
+        end
+    end
+
+    previousDisplayCount = currentDisplayCount
+end
+
+-- Initialize screen watcher if auto-EOD is enabled
+if userConfig.autoEODOnUnplug then
+    screenWatcher = hs.screen.watcher.new(handleDisplayChange)
+    screenWatcher:start()
+    log("Automatic EOD on unplug: ENABLED")
+else
+    log("Automatic EOD on unplug: DISABLED")
+end
+
 -- Set up CLI for Raycast integration
 hs.ipc.cliInstall()
 
 -- Show notification on load
-notify("Display Manager", "Hammerspoon display arrangement loaded")
+local statusMsg = userConfig.autoEODOnUnplug and "Auto-EOD enabled" or "Manual mode"
+notify("Display Manager", string.format("Hammerspoon loaded - %s", statusMsg))
 log("Display arrangement module loaded successfully")
