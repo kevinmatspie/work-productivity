@@ -146,7 +146,7 @@ diskutil list
 To automatically update your Slack status based on mode (work/home/meeting/eod):
 
 1. Get a Slack User Token:
-   - Go to https://api.slack.com/apps
+   - **Sign in to your Slack workspace at [https://api.slack.com/apps](https://api.slack.com/apps)**
    - Create a new app or select an existing one
    - Navigate to "OAuth & Permissions"
    - Add the `users.profile:write` scope
