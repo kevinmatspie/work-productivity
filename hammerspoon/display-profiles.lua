@@ -19,6 +19,8 @@ config.autoEODOnUnplug = true
 -- Required scopes: users.profile:write
 config.slackIntegration = {
     enabled = false,  -- Set to true to enable Slack integration
+    -- WARNING: Never commit your Slack token to version control!
+    -- It is best to use an environment variable or a separate untracked config file for sensitive credentials.
     token = nil,  -- Your Slack User Token (xoxp-...) - KEEP THIS PRIVATE!
 
     -- Status messages for each mode
