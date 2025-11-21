@@ -13,6 +13,46 @@ config.timeMachineDisk = "Time Machine"
 -- Set to false if you prefer to manually trigger EOD via Raycast
 config.autoEODOnUnplug = true
 
+-- Slack Integration (optional)
+-- To enable Slack status updates, you need a Slack User Token (xoxp-...)
+-- Get your token from: https://api.slack.com/authentication/token-types#user
+-- Required scopes: users.profile:write
+config.slackIntegration = {
+    enabled = false,  -- Set to true to enable Slack integration
+    -- WARNING: Never commit your Slack token to version control!
+    -- It is best to use an environment variable or a separate untracked config file for sensitive credentials.
+    token = nil,  -- Your Slack User Token (xoxp-...) - KEEP THIS PRIVATE!
+
+    -- Status messages for each mode
+    statuses = {
+        work = {
+            text = "At the office",
+            emoji = ":office:",
+            expiration = nil  -- nil means no expiration, or use Unix timestamp
+        },
+        home = {
+            text = "Working from home",
+            emoji = ":house:",
+            expiration = nil
+        },
+        meeting = {
+            text = "In a meeting",
+            emoji = ":calendar:",
+            expiration = nil  -- You could set this to auto-expire after 1 hour
+        },
+        eod = {
+            text = "Offline",
+            emoji = ":zzz:",
+            expiration = nil
+        }
+    }
+}
+
+-- Meeting mode settings
+-- App to bring to foreground when entering meeting mode
+config.meetingNotesApp = "Notion"  -- Change to your preferred note-taking app
+-- Options: "Notion", "Obsidian", "Apple Notes", "Evernote", "OneNote", etc.
+
 -- Work Layout (3 displays)
 -- Display numbering: 1 = laptop, 2 = first external, 3 = second external
 -- Position options: "maximized", "left-half", "right-half", "top-half", "bottom-half", "center", or nil
@@ -78,6 +118,29 @@ config.homeLayout = {
 
     ["Spotify"] = {display = 1, position = "bottom-half"},
     ["Music"] = {display = 1, position = "bottom-half"},
+
+    -- Add your own apps here
+    -- ["App Name"] = {display = 1, position = "maximized"},
+}
+
+-- Meeting Layout (laptop only)
+-- Display numbering: 1 = laptop (all windows will be on laptop for meetings)
+-- This layout is used when you trigger "meeting" mode
+config.meetingLayout = {
+    -- Example: Video conferencing on left, notes on right
+    ["Zoom"] = {display = 1, position = "left-half"},
+    ["Google Meet"] = {display = 1, position = "left-half"},
+    ["Microsoft Teams"] = {display = 1, position = "left-half"},
+
+    -- Note-taking app will be brought to foreground (specified in meetingNotesApp)
+    ["Notion"] = {display = 1, position = "right-half"},
+    ["Obsidian"] = {display = 1, position = "right-half"},
+
+    -- Keep Slack visible for messages
+    ["Slack"] = {display = 1, position = "right-half"},
+
+    -- Browser can be minimized or kept in background
+    -- ["Google Chrome"] = {display = 1, position = "maximized"},
 
     -- Add your own apps here
     -- ["App Name"] = {display = 1, position = "maximized"},

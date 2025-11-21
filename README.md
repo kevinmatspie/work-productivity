@@ -8,6 +8,7 @@ This system uses **Hammerspoon** (window management automation) + **Raycast** (l
 
 - **Work Setup** (3 displays): Laptop + 2 external monitors
 - **Home Setup** (2 displays): Laptop + 1 external monitor
+- **Meeting Setup**: Consolidate to laptop, bring notes app to foreground
 - **End of Day**: Consolidate to laptop screen, eject Time Machine disk
 
 ## Features
@@ -16,6 +17,8 @@ This system uses **Hammerspoon** (window management automation) + **Raycast** (l
 ✅ Resize and position windows (maximized, left-half, right-half, etc.)
 ✅ Detect display configuration automatically
 ✅ **Automatic EOD when unplugging** - Detects when you unplug and automatically consolidates windows
+✅ **Slack status integration** - Automatically update Slack status based on work/home/meeting/eod mode
+✅ **Meeting mode** - Quick setup for unplugged meetings with note-taking app
 ✅ Safely eject Time Machine disk before unplugging
 ✅ Fast one-command setup via Raycast
 ⚠️ Does NOT move windows between Mission Control Spaces (relies on macOS to remember)
@@ -108,9 +111,10 @@ chmod +x ~/Library/Application\ Support/raycast/scripts/*.sh
 1. Open Raycast (Cmd+Space or your configured hotkey)
 2. Type "script commands" and press Enter
 3. If prompted, enable Script Commands
-4. Your three commands should now appear:
+4. Your commands should now appear:
    - 💼 **Work Display Setup**
    - 🏠 **Home Display Setup**
+   - 📝 **Meeting Setup**
    - 🌙 **End of Day Setup**
 
 ### 5. Configure Automatic Behavior (Optional)
@@ -137,6 +141,60 @@ To find your disk name, run in Terminal:
 diskutil list
 ```
 
+**Slack Integration** (optional)
+
+To automatically update your Slack status based on mode (work/home/meeting/eod):
+
+1. Get a Slack User Token:
+   - **Sign in to your Slack workspace at [https://api.slack.com/apps](https://api.slack.com/apps)**
+   - Create a new app or select an existing one
+   - Navigate to "OAuth & Permissions"
+   - Add the `users.profile:write` scope
+   - Install the app to your workspace
+   - Copy your User OAuth Token (starts with `xoxp-`)
+
+2. Configure in `~/.hammerspoon/display-profiles.lua`:
+   ```lua
+   config.slackIntegration = {
+       enabled = true,
+       token = "xoxp-your-token-here",  -- KEEP THIS PRIVATE!
+
+       statuses = {
+           work = {
+               text = "At the office",
+               emoji = ":office:",
+               expiration = nil
+           },
+           home = {
+               text = "Working from home",
+               emoji = ":house:",
+               expiration = nil
+           },
+           meeting = {
+               text = "In a meeting",
+               emoji = ":calendar:",
+               expiration = nil
+           },
+           eod = {
+               text = "Offline",
+               emoji = ":zzz:",
+               expiration = nil
+           }
+       }
+   }
+   ```
+
+3. Customize status text and emojis to your preference
+
+**Meeting Mode Settings**
+
+Configure which note-taking app to bring to foreground during meetings:
+
+```lua
+config.meetingNotesApp = "Notion"  -- Change to your preferred app
+-- Options: "Notion", "Obsidian", "Apple Notes", "Evernote", "OneNote", etc.
+```
+
 ## Usage
 
 ### Via Raycast (Recommended)
@@ -144,6 +202,7 @@ diskutil list
 Open Raycast and type:
 - `work` → Select "Work Display Setup"
 - `home` → Select "Home Display Setup"
+- `meeting` → Select "Meeting Setup"
 - `eod` → Select "End of Day Setup"
 
 ### Via Hammerspoon Console (for testing)
@@ -151,16 +210,19 @@ Open Raycast and type:
 Open Hammerspoon Console and type:
 - `arrangeForWork()`
 - `arrangeForHome()`
+- `arrangeForMeeting()`
 - `arrangeForEOD()`
 
 ## How It Works
 
-1. **Raycast** triggers a script command when you type "work", "home", or "eod"
+1. **Raycast** triggers a script command when you type "work", "home", "meeting", or "eod"
 2. The script calls **Hammerspoon** via CLI: `hs -c "arrangeForWork()"`
 3. **Hammerspoon** reads your configuration and:
    - Detects connected displays
    - Moves each app's windows to the configured display
    - Resizes/positions windows as specified
+   - Updates your Slack status (if enabled)
+   - Brings note-taking app to foreground (meeting mode)
    - Shows a notification when complete
 
 ## Tips & Best Practices
@@ -187,6 +249,13 @@ While Hammerspoon cannot move windows between Mission Control Spaces, macOS does
 2. Wait for display to initialize
 3. Open Raycast → type "home" → Enter
 4. Windows arrange across 2 displays
+
+**Preparing for a Meeting:**
+1. Open Raycast → type "meeting" → Enter
+2. Windows consolidate to laptop screen
+3. Note-taking app comes to foreground
+4. Slack status updates to "In a meeting"
+5. Join your video call - ready to take notes!
 
 **End of Day:**
 
@@ -226,13 +295,15 @@ While Hammerspoon cannot move windows between Mission Control Spaces, macOS does
 ```
 work-productivity/
 ├── hammerspoon/
-│   ├── init.lua              # Main Hammerspoon logic
-│   └── display-profiles.lua  # Your customizable app layouts
+│   ├── init.lua              # Main Hammerspoon logic with Slack integration
+│   └── display-profiles.lua  # Your customizable app layouts and settings
 ├── raycast/
 │   ├── work-setup.sh         # Raycast command for work
 │   ├── home-setup.sh         # Raycast command for home
+│   ├── meeting-setup.sh      # Raycast command for meetings
 │   └── eod-setup.sh          # Raycast command for end of day
-└── README.md                 # This file
+├── README.md                 # This file
+└── QUICKSTART.md             # 5-minute setup guide
 ```
 
 ## Advanced Customization

@@ -131,6 +131,67 @@ local function ejectDisk(diskName)
     return ok and result == "success"
 end
 
+local function setSlackStatus(statusText, statusEmoji, expiration)
+    -- Only proceed if Slack integration is enabled and token is configured
+    if not userConfig.slackIntegration or not userConfig.slackIntegration.enabled then
+        log("Slack integration disabled, skipping status update")
+        return
+    end
+
+    if not userConfig.slackIntegration.token then
+        log("Slack token not configured, skipping status update")
+        return
+    end
+
+    local token = userConfig.slackIntegration.token
+
+    -- Build the status profile JSON
+    local profile = {
+        status_text = statusText or "",
+        status_emoji = statusEmoji or "",
+    }
+
+    -- Add expiration if provided (Unix timestamp)
+    if expiration then
+        profile.status_expiration = expiration
+    end
+
+    -- Convert to JSON
+    local profileJson = hs.json.encode(profile)
+
+    -- Make API call to Slack
+    local url = "https://slack.com/api/users.profile.set"
+    local headers = {
+        ["Authorization"] = "Bearer " .. token,
+        ["Content-Type"] = "application/json; charset=utf-8"
+    }
+
+    hs.http.asyncPost(url, profileJson, headers, function(status, body, headers)
+        if status == 200 then
+            local response = hs.json.decode(body)
+            if response and response.ok then
+                log(string.format("Slack status updated: %s %s", statusEmoji, statusText))
+            else
+                log(string.format("Slack API error: %s", response.error or "unknown"))
+            end
+        else
+            log(string.format("Slack HTTP error: %d", status))
+        end
+    end)
+end
+
+local function bringAppToForeground(appName)
+    local app = hs.application.find(appName)
+    if app then
+        app:activate()
+        log(string.format("Brought %s to foreground", appName))
+        return true
+    else
+        log(string.format("App not running: %s", appName))
+        return false
+    end
+end
+
 -- Main Functions
 
 function arrangeForWork()
@@ -144,6 +205,13 @@ function arrangeForWork()
     end
 
     local moved, failed = arrangeWindows(userConfig.workLayout)
+
+    -- Set Slack status if configured
+    if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.work then
+        local status = userConfig.slackIntegration.statuses.work
+        setSlackStatus(status.text, status.emoji, status.expiration)
+    end
+
     notify("Work Setup Complete",
            string.format("Arranged %d window(s) across 3 displays", moved))
     log(string.format("Work arrangement complete: %d moved, %d failed", moved, failed))
@@ -160,6 +228,13 @@ function arrangeForHome()
     end
 
     local moved, failed = arrangeWindows(userConfig.homeLayout)
+
+    -- Set Slack status if configured
+    if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.home then
+        local status = userConfig.slackIntegration.statuses.home
+        setSlackStatus(status.text, status.emoji, status.expiration)
+    end
+
     notify("Home Setup Complete",
            string.format("Arranged %d window(s) across 2 displays", moved))
     log(string.format("Home arrangement complete: %d moved, %d failed", moved, failed))
@@ -198,9 +273,59 @@ function arrangeForEOD()
         end
     end
 
+    -- Set Slack status if configured
+    if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.eod then
+        local status = userConfig.slackIntegration.statuses.eod
+        setSlackStatus(status.text, status.emoji, status.expiration)
+    end
+
     notify("EOD Setup Complete",
            string.format("Moved %d window(s) to laptop display. Safe to unplug!", moved))
     log(string.format("EOD arrangement complete: %d windows moved to primary display", moved))
+end
+
+function arrangeForMeeting()
+    log("Arranging for meeting (laptop only)...")
+
+    -- Move all windows to laptop screen
+    local moved = 0
+    local allApps = hs.application.runningApplications()
+
+    for _, app in ipairs(allApps) do
+        local windows = app:allWindows()
+        for _, window in ipairs(windows) do
+            if window:isStandard() and window:isVisible() then
+                local currentScreen = window:screen()
+                if currentScreen ~= getPrimaryScreen() then
+                    window:moveToScreen(getPrimaryScreen(), false, true)
+                    moved = moved + 1
+                end
+            end
+        end
+    end
+
+    -- Apply meeting layout if configured
+    if userConfig.meetingLayout then
+        arrangeWindows(userConfig.meetingLayout)
+    end
+
+    -- Bring note-taking app to foreground if configured
+    if userConfig.meetingNotesApp then
+        -- Small delay to let window arrangement finish
+        hs.timer.doAfter(0.5, function()
+            bringAppToForeground(userConfig.meetingNotesApp)
+        end)
+    end
+
+    -- Set Slack status if configured
+    if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.meeting then
+        local status = userConfig.slackIntegration.statuses.meeting
+        setSlackStatus(status.text, status.emoji, status.expiration)
+    end
+
+    notify("Meeting Setup Complete",
+           string.format("Ready for meeting - %s opened", userConfig.meetingNotesApp or "windows arranged"))
+    log(string.format("Meeting arrangement complete: %d windows moved to primary display", moved))
 end
 
 -- Screen Watcher for Automatic Unplug Detection
