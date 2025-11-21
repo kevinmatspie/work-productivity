@@ -59,6 +59,7 @@ hs.application.frontmostApplication():name()
 Open Raycast and type:
 - `work` → Your windows should rearrange!
 - `home` → Test home setup
+- `meeting` → Test meeting mode
 - `eod` → Test end of day
 
 ## Next Steps
@@ -66,6 +67,8 @@ Open Raycast and type:
 - [ ] Plug into your work docking station and run "work" command
 - [ ] Adjust window positions in the config file as needed
 - [ ] Set your Time Machine disk name in config (if applicable)
+- [ ] Configure Slack integration for automatic status updates (optional - see README)
+- [ ] Set your preferred note-taking app for meeting mode
 - [ ] Create keyboard shortcuts in Raycast for even faster access
 
 ## Troubleshooting
@@ -85,13 +88,17 @@ Open Raycast and type:
 
 1. **Automatic unplugging:** By default, Hammerspoon detects when you unplug and automatically runs EOD actions (ejects Time Machine, consolidates windows). Just unplug and go! Disable by setting `config.autoEODOnUnplug = false` in your config.
 
-2. **Keyboard shortcuts:** In Raycast, right-click each command and assign a hotkey for even faster access
+2. **Meeting mode:** Perfect for unplugged meetings - consolidates windows and brings your note-taking app forward. Set `config.meetingNotesApp` to your preferred app.
 
-3. **Display order:** Run this in Hammerspoon Console to see your display numbers:
+3. **Slack integration:** Enable automatic status updates to let your team know when you're at the office, WFH, in a meeting, or offline. See README for setup instructions.
+
+4. **Keyboard shortcuts:** In Raycast, right-click each command and assign a hotkey for even faster access (e.g., Cmd+Shift+W for work setup)
+
+5. **Display order:** Run this in Hammerspoon Console to see your display numbers:
    ```lua
    for i, screen in ipairs(hs.screen.allScreens()) do print(i, screen:name()) end
    ```
 
-4. **Testing layouts:** Use Hammerspoon Console to test functions directly before creating new Raycast commands
+6. **Testing layouts:** Use Hammerspoon Console to test functions directly before creating new Raycast commands
 
 Enjoy your automated workspace! 🚀
