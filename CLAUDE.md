@@ -73,16 +73,25 @@ Trigger arrangeForEOD() after 1s delay
 ```
 work-productivity/
 ├── hammerspoon/
-│   ├── init.lua                    # Main automation logic (330 lines)
-│   └── display-profiles.lua        # User configuration file (155 lines)
+│   ├── init.lua                              # Main automation logic (420 lines)
+│   ├── display-profiles.lua                  # User configuration file (158 lines)
+│   └── display-profiles-secrets.lua.example  # Secrets template (not used directly)
 ├── raycast/
 │   ├── work-setup.sh              # Triggers arrangeForWork()
 │   ├── home-setup.sh              # Triggers arrangeForHome()
 │   ├── meeting-setup.sh           # Triggers arrangeForMeeting()
 │   └── eod-setup.sh               # Triggers arrangeForEOD()
-├── README.md                       # Full documentation
-├── QUICKSTART.md                   # 5-minute setup guide
-└── CLAUDE.md                       # This file
+├── .gitignore                     # Excludes secrets file from version control
+├── README.md                      # Full documentation
+├── QUICKSTART.md                  # 5-minute setup guide
+└── CLAUDE.md                      # This file
+
+User's home directory (~/.hammerspoon/):
+├── init.lua                       # Copied from hammerspoon/init.lua
+├── display-profiles.lua           # Copied from hammerspoon/display-profiles.lua
+└── display-profiles-secrets.lua   # Created by user (NOT in git repo)
+                                   # Contains sensitive API tokens
+                                   # Permissions: 600 (user read/write only)
 ```
 
 ### Core Functions (hammerspoon/init.lua)
@@ -209,7 +218,7 @@ config.meetingNotesApp = "Notion"  -- app name
 -- Slack integration (optional)
 config.slackIntegration = {
     enabled = false,  -- Set to true to enable
-    token = nil,  -- "xoxp-..." token
+    -- Token is loaded from ~/.hammerspoon/display-profiles-secrets.lua
     statuses = {
         work = { text = "...", emoji = ":..:", expiration = nil },
         home = { text = "...", emoji = ":..:", expiration = nil },
@@ -244,6 +253,121 @@ return config
 - Display numbering is spatial (sorted left-to-right by position)
 - Position `nil` means just move to display, don't resize
 - Position "maximized" does NOT enter macOS full-screen mode (just resizes window)
+
+### Secrets Management
+
+**Architecture**
+
+To protect sensitive information (Slack API tokens, future credentials), the system uses a separate, untracked secrets file:
+
+1. **Template file** (in git repo): `hammerspoon/display-profiles-secrets.lua.example`
+   - Example structure for users to copy
+   - Committed to version control as documentation
+   - Not used directly by the system
+
+2. **Actual secrets file** (NOT in git): `~/.hammerspoon/display-profiles-secrets.lua`
+   - Created by user from template
+   - Contains real API tokens and sensitive data
+   - File permissions: `600` (user read/write only)
+   - Listed in `.gitignore` to prevent accidental commits
+   - Loaded automatically by `init.lua` at startup
+
+**Loading Process** (in `init.lua` lines 7-48)
+
+```lua
+-- 1. Define loading function
+local function loadSecrets()
+    local secretsPath = os.getenv("HOME") .. "/.hammerspoon/display-profiles-secrets.lua"
+
+    -- Check if file exists
+    local file = io.open(secretsPath, "r")
+    if not file then return nil end
+    file:close()
+
+    -- Load secrets using Lua's dofile
+    local success, secrets = pcall(dofile, secretsPath)
+    if success then
+        return secrets
+    else
+        print("[DisplayManager] Error loading secrets file: " .. tostring(secrets))
+        return nil
+    end
+end
+
+-- 2. Load secrets
+local secrets = loadSecrets()
+
+-- 3. Merge into config
+if secrets then
+    if secrets.slackToken and userConfig.slackIntegration then
+        userConfig.slackIntegration.token = secrets.slackToken
+        print("[DisplayManager] Loaded Slack token from secrets file")
+    end
+    -- Future secrets can be added here
+else
+    print("[DisplayManager] No secrets file found")
+    if userConfig.slackIntegration and userConfig.slackIntegration.enabled then
+        print("[DisplayManager] WARNING: Slack integration enabled but no token configured")
+    end
+end
+```
+
+**Secrets File Format** (`~/.hammerspoon/display-profiles-secrets.lua`)
+
+```lua
+local secrets = {}
+
+-- Slack API Token
+secrets.slackToken = "xoxp-your-actual-token-here"
+
+-- Future secrets can be added:
+-- secrets.calendarToken = "your-calendar-api-token"
+-- secrets.teamsToken = "your-teams-api-token"
+
+return secrets
+```
+
+**Security Features**
+
+1. **File system protection**: `chmod 600` ensures only user can read/write
+2. **Version control protection**: Listed in `.gitignore` prevents git commits
+3. **Encryption at rest**: macOS FileVault encrypts the file on disk
+4. **Graceful fallback**: System warns if secrets expected but not found
+5. **Safe loading**: Uses `pcall()` to catch errors without crashing
+
+**User Setup Steps**
+
+```bash
+# 1. Copy template
+cp hammerspoon/display-profiles-secrets.lua.example ~/.hammerspoon/display-profiles-secrets.lua
+
+# 2. Edit with real token
+nano ~/.hammerspoon/display-profiles-secrets.lua
+
+# 3. Set restrictive permissions
+chmod 600 ~/.hammerspoon/display-profiles-secrets.lua
+
+# 4. Enable Slack integration in display-profiles.lua
+# (Set enabled = true)
+
+# 5. Reload Hammerspoon
+```
+
+**Why This Approach?**
+
+Compared to alternatives:
+- **vs. Environment variables**: File-based is more secure (not visible in process list), easier to manage
+- **vs. macOS Keychain**: Simpler implementation, no async subprocess calls, fast startup
+- **vs. Keeper CLI**: No external dependencies, works offline, appropriate for single-token use case
+- **vs. Hardcoded in config**: Secrets file is never committed, separate from version-controlled config
+
+**Future Enhancements**
+
+Could add support for:
+- Multiple secret sources (Keychain fallback)
+- Encrypted secrets file
+- Integration with enterprise secret managers (Keeper, 1Password CLI)
+- Per-secret configuration (which source to use)
 
 ### Raycast Script Commands
 

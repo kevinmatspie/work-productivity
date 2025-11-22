@@ -17,11 +17,14 @@ config.autoEODOnUnplug = true
 -- To enable Slack status updates, you need a Slack User Token (xoxp-...)
 -- Get your token from: https://api.slack.com/authentication/token-types#user
 -- Required scopes: users.profile:write
+--
+-- IMPORTANT: Do NOT put your token here!
+-- Instead, create ~/.hammerspoon/display-profiles-secrets.lua (see README.md for setup)
+-- The token will be automatically loaded from that file at startup.
 config.slackIntegration = {
     enabled = false,  -- Set to true to enable Slack integration
-    -- WARNING: Never commit your Slack token to version control!
-    -- It is best to use an environment variable or a separate untracked config file for sensitive credentials.
-    token = nil,  -- Your Slack User Token (xoxp-...) - KEEP THIS PRIVATE!
+    -- Token is loaded from ~/.hammerspoon/display-profiles-secrets.lua
+    -- See hammerspoon/display-profiles-secrets.lua.example for template
 
     -- Status messages for each mode
     statuses = {
