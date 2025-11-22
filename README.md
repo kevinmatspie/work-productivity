@@ -145,46 +145,59 @@ diskutil list
 
 To automatically update your Slack status based on mode (work/home/meeting/eod):
 
-1. Get a Slack User Token:
-   - **Sign in to your Slack workspace at [https://api.slack.com/apps](https://api.slack.com/apps)**
+1. **Get a Slack User Token:**
+   - Sign in to your Slack workspace at [https://api.slack.com/apps](https://api.slack.com/apps)
    - Create a new app or select an existing one
    - Navigate to "OAuth & Permissions"
    - Add the `users.profile:write` scope
    - Install the app to your workspace
    - Copy your User OAuth Token (starts with `xoxp-`)
 
-2. Configure in `~/.hammerspoon/display-profiles.lua`:
+2. **Create a secrets file:**
+   ```bash
+   # Copy the example template
+   cp hammerspoon/display-profiles-secrets.lua.example ~/.hammerspoon/display-profiles-secrets.lua
+
+   # Edit and add your actual token
+   nano ~/.hammerspoon/display-profiles-secrets.lua
+
+   # Set restrictive permissions (user read/write only)
+   chmod 600 ~/.hammerspoon/display-profiles-secrets.lua
+   ```
+
+3. **Add your token to the secrets file:**
+   ```lua
+   -- ~/.hammerspoon/display-profiles-secrets.lua
+   local secrets = {}
+
+   secrets.slackToken = "xoxp-your-actual-token-here"
+
+   return secrets
+   ```
+
+4. **Enable Slack integration in `~/.hammerspoon/display-profiles.lua`:**
    ```lua
    config.slackIntegration = {
-       enabled = true,
-       token = "xoxp-your-token-here",  -- KEEP THIS PRIVATE!
+       enabled = true,  -- Set to true to enable
+       -- Token is loaded from ~/.hammerspoon/display-profiles-secrets.lua
 
        statuses = {
-           work = {
-               text = "At the office",
-               emoji = ":office:",
-               expiration = nil
-           },
-           home = {
-               text = "Working from home",
-               emoji = ":house:",
-               expiration = nil
-           },
-           meeting = {
-               text = "In a meeting",
-               emoji = ":calendar:",
-               expiration = nil
-           },
-           eod = {
-               text = "Offline",
-               emoji = ":zzz:",
-               expiration = nil
-           }
+           work = { text = "At the office", emoji = ":office:", expiration = nil },
+           home = { text = "Working from home", emoji = ":house:", expiration = nil },
+           meeting = { text = "In a meeting", emoji = ":calendar:", expiration = nil },
+           eod = { text = "Offline", emoji = ":zzz:", expiration = nil }
        }
    }
    ```
 
-3. Customize status text and emojis to your preference
+5. **Customize status text and emojis** to your preference
+
+6. **Reload Hammerspoon** (menu bar icon → Reload Config) to apply changes
+
+**Security Notes:**
+- The secrets file (`~/.hammerspoon/display-profiles-secrets.lua`) is in `.gitignore` and will never be committed
+- File permissions (600) ensure only your user account can read it
+- Never commit your Slack token to version control!
 
 **Meeting Mode Settings**
 

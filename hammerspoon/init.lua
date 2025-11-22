@@ -4,6 +4,49 @@
 -- Load user configuration
 local userConfig = require("display-profiles")
 
+-- Load secrets from external file
+-- This file should be in ~/.hammerspoon/display-profiles-secrets.lua
+-- It should NOT be committed to version control
+local function loadSecrets()
+    local secretsPath = os.getenv("HOME") .. "/.hammerspoon/display-profiles-secrets.lua"
+
+    -- Check if file exists
+    local file = io.open(secretsPath, "r")
+    if not file then
+        return nil
+    end
+    file:close()
+
+    -- Load secrets using Lua's dofile
+    local success, secrets = pcall(dofile, secretsPath)
+    if success then
+        return secrets
+    else
+        print("[DisplayManager] Error loading secrets file: " .. tostring(secrets))
+        return nil
+    end
+end
+
+-- Merge secrets into config
+local secrets = loadSecrets()
+if secrets then
+    -- Merge Slack token if provided
+    if secrets.slackToken and userConfig.slackIntegration then
+        userConfig.slackIntegration.token = secrets.slackToken
+        print("[DisplayManager] Loaded Slack token from secrets file")
+    end
+
+    -- Future: Add other secrets here
+    -- if secrets.calendarToken then
+    --     userConfig.calendarToken = secrets.calendarToken
+    -- end
+else
+    print("[DisplayManager] No secrets file found at ~/.hammerspoon/display-profiles-secrets.lua")
+    if userConfig.slackIntegration and userConfig.slackIntegration.enabled then
+        print("[DisplayManager] WARNING: Slack integration enabled but no token configured")
+    end
+end
+
 -- Helper Functions
 local function log(message)
     print(string.format("[DisplayManager] %s", message))

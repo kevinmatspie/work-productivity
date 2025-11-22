@@ -1,0 +1,6 @@
+# Secrets file - contains sensitive API tokens
+# This file should ONLY exist in ~/.hammerspoon/, never in the git repo
+hammerspoon/display-profiles-secrets.lua
+
+# macOS
+.DS_Store
