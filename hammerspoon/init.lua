@@ -123,6 +123,13 @@ local function moveWindowToScreen(window, screenIndex, position)
             windowFrame.x = screenFrame.x + (screenFrame.w - windowFrame.w) / 2
             windowFrame.y = screenFrame.y + (screenFrame.h - windowFrame.h) / 2
             window:setFrame(windowFrame)
+        elseif type(position) == "table" then
+            -- Custom frame: {x, y, w, h} as absolute coordinates
+            windowFrame.x = position.x or position[1]
+            windowFrame.y = position.y or position[2]
+            windowFrame.w = position.w or position[3]
+            windowFrame.h = position.h or position[4]
+            window:setFrame(windowFrame)
         end
     end
 
@@ -134,9 +141,9 @@ local function arrangeWindows(layout)
     local failed = 0
 
     for appName, config in pairs(layout) do
-        local app = hs.application.find(appName)
+        local app = hs.application.find(appName, true)  -- exact match only
 
-        if app then
+        if app and app.allWindows then
             local windows = app:allWindows()
             for _, window in ipairs(windows) do
                 if window:isStandard() and window:isVisible() then
@@ -174,7 +181,39 @@ local function ejectDisk(diskName)
     return ok and result == "success"
 end
 
-local function setSlackStatus(statusText, statusEmoji, expiration)
+local function setSlackPresence(presence)
+    -- Only proceed if Slack integration is enabled and token is configured
+    if not userConfig.slackIntegration or not userConfig.slackIntegration.enabled then
+        return
+    end
+
+    if not userConfig.slackIntegration.token then
+        return
+    end
+
+    local token = userConfig.slackIntegration.token
+    local url = "https://slack.com/api/users.setPresence"
+    local headers = {
+        ["Authorization"] = "Bearer " .. token,
+        ["Content-Type"] = "application/json; charset=utf-8"
+    }
+    local body = hs.json.encode({presence = presence})
+
+    hs.http.asyncPost(url, body, headers, function(status, body, headers)
+        if status == 200 then
+            local response = hs.json.decode(body)
+            if response and response.ok then
+                log(string.format("Slack presence set to: %s", presence))
+            else
+                log(string.format("Slack presence API error: %s", response.error or "unknown"))
+            end
+        else
+            log(string.format("Slack presence HTTP error: %d", status))
+        end
+    end)
+end
+
+local function setSlackStatus(statusText, statusEmoji, expiration, presence)
     -- Only proceed if Slack integration is enabled and token is configured
     if not userConfig.slackIntegration or not userConfig.slackIntegration.enabled then
         log("Slack integration disabled, skipping status update")
@@ -188,10 +227,16 @@ local function setSlackStatus(statusText, statusEmoji, expiration)
 
     local token = userConfig.slackIntegration.token
 
+    -- Support emoji as string or table (random selection from table)
+    local selectedEmoji = statusEmoji
+    if type(statusEmoji) == "table" then
+        selectedEmoji = statusEmoji[math.random(#statusEmoji)]
+    end
+
     -- Build the status profile JSON
     local profile = {
         status_text = statusText or "",
-        status_emoji = statusEmoji or "",
+        status_emoji = selectedEmoji or "",
     }
 
     -- Add expiration if provided (Unix timestamp)
@@ -199,8 +244,8 @@ local function setSlackStatus(statusText, statusEmoji, expiration)
         profile.status_expiration = expiration
     end
 
-    -- Convert to JSON
-    local profileJson = hs.json.encode(profile)
+    -- Convert to JSON - Slack expects {profile: {...}}
+    local profileJson = hs.json.encode({profile = profile})
 
     -- Make API call to Slack
     local url = "https://slack.com/api/users.profile.set"
@@ -213,7 +258,7 @@ local function setSlackStatus(statusText, statusEmoji, expiration)
         if status == 200 then
             local response = hs.json.decode(body)
             if response and response.ok then
-                log(string.format("Slack status updated: %s %s", statusEmoji, statusText))
+                log(string.format("Slack status updated: %s %s", selectedEmoji, statusText))
             else
                 log(string.format("Slack API error: %s", response.error or "unknown"))
             end
@@ -221,6 +266,11 @@ local function setSlackStatus(statusText, statusEmoji, expiration)
             log(string.format("Slack HTTP error: %d", status))
         end
     end)
+
+    -- Set presence if specified ("auto" or "away")
+    if presence then
+        setSlackPresence(presence)
+    end
 end
 
 local function bringAppToForeground(appName)
@@ -252,7 +302,7 @@ function arrangeForWork()
     -- Set Slack status if configured
     if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.work then
         local status = userConfig.slackIntegration.statuses.work
-        setSlackStatus(status.text, status.emoji, status.expiration)
+        setSlackStatus(status.text, status.emoji, status.expiration, status.presence)
     end
 
     notify("Work Setup Complete",
@@ -275,7 +325,7 @@ function arrangeForHome()
     -- Set Slack status if configured
     if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.home then
         local status = userConfig.slackIntegration.statuses.home
-        setSlackStatus(status.text, status.emoji, status.expiration)
+        setSlackStatus(status.text, status.emoji, status.expiration, status.presence)
     end
 
     notify("Home Setup Complete",
@@ -301,29 +351,28 @@ function arrangeForEOD()
 
     -- Move all windows to primary (laptop) screen
     local moved = 0
-    local allApps = hs.application.runningApplications()
+    -- local allApps = hs.application.runningApplications()
 
-    for _, app in ipairs(allApps) do
-        local windows = app:allWindows()
-        for _, window in ipairs(windows) do
-            if window:isStandard() and window:isVisible() then
-                local currentScreen = window:screen()
-                if currentScreen ~= getPrimaryScreen() then
-                    window:moveToScreen(getPrimaryScreen(), false, true)
-                    moved = moved + 1
-                end
-            end
-        end
-    end
+    -- for _, app in ipairs(allApps) do
+    --     local windows = app:allWindows()
+    --     for _, window in ipairs(windows) do
+    --         if window:isStandard() and window:isVisible() then
+    --             local currentScreen = window:screen()
+    --             if currentScreen ~= getPrimaryScreen() then
+    --                 window:moveToScreen(getPrimaryScreen(), false, true)
+    --                 moved = moved + 1
+    --             end
+    --         end
+    --     end
+    -- end
 
     -- Set Slack status if configured
     if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.eod then
         local status = userConfig.slackIntegration.statuses.eod
-        setSlackStatus(status.text, status.emoji, status.expiration)
+        setSlackStatus(status.text, status.emoji, status.expiration, status.presence)
     end
 
-    notify("EOD Setup Complete",
-           string.format("Moved %d window(s) to laptop display. Safe to unplug!", moved))
+    notify("EOD Setup Complete", "Safe to unplug!")
     log(string.format("EOD arrangement complete: %d windows moved to primary display", moved))
 end
 
@@ -363,12 +412,58 @@ function arrangeForMeeting()
     -- Set Slack status if configured
     if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.meeting then
         local status = userConfig.slackIntegration.statuses.meeting
-        setSlackStatus(status.text, status.emoji, status.expiration)
+        setSlackStatus(status.text, status.emoji, status.expiration, status.presence)
     end
 
     notify("Meeting Setup Complete",
            string.format("Ready for meeting - %s opened", userConfig.meetingNotesApp or "windows arranged"))
     log(string.format("Meeting arrangement complete: %d windows moved to primary display", moved))
+end
+
+function arrangeForWalk()
+    log("Setting up for walk...")
+
+    -- Set Slack status if configured
+    if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.walk then
+        local status = userConfig.slackIntegration.statuses.walk
+        -- Calculate expiration timestamp from minutes
+        local expiration = nil
+        if status.expirationMinutes then
+            expiration = os.time() + (status.expirationMinutes * 60)
+        end
+        setSlackStatus(status.text, status.emoji, expiration, status.presence)
+    end
+
+    notify("Walk Setup Complete", "Screen will lock. Status clears in 30 min.")
+    log("Walk setup complete")
+
+    -- Lock the screen after a brief delay for notification to show
+    hs.timer.doAfter(1, function()
+        hs.caffeinate.lockScreen()
+    end)
+end
+
+function arrangeForLunch()
+    log("Setting up for lunch...")
+
+    -- Set Slack status if configured
+    if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.lunch then
+        local status = userConfig.slackIntegration.statuses.lunch
+        -- Calculate expiration timestamp from minutes
+        local expiration = nil
+        if status.expirationMinutes then
+            expiration = os.time() + (status.expirationMinutes * 60)
+        end
+        setSlackStatus(status.text, status.emoji, expiration, status.presence)
+    end
+
+    notify("Lunch Setup Complete", "Screen will lock. Status clears in 1 hour.")
+    log("Lunch setup complete")
+
+    -- Lock the screen after a brief delay for notification to show
+    hs.timer.doAfter(1, function()
+        hs.caffeinate.lockScreen()
+    end)
 end
 
 -- Screen Watcher for Automatic Unplug Detection

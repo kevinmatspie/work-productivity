@@ -14,5 +14,8 @@
 # @raycast.author Your Name
 # @raycast.authorURL https://github.com/yourusername
 
+# Eject all disks via Raycast
+open "raycast://extensions/raycast/system/eject-all-disks"
+
 # Trigger Hammerspoon to arrange for meeting
 /usr/local/bin/hs -c "arrangeForMeeting()"

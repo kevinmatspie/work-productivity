@@ -5,13 +5,13 @@ local config = {}
 
 -- Time Machine disk name (set to nil if you don't use Time Machine)
 -- This will be ejected during the "eod" command
-config.timeMachineDisk = "Time Machine"
+config.timeMachineDisk = nil  -- Disk ejection handled by Raycast "eject all disks"
 
 -- Automatic EOD on unplug
 -- When set to true, automatically runs EOD actions when you unplug from docking station
 -- (ejects Time Machine disk and moves all windows to laptop screen)
 -- Set to false if you prefer to manually trigger EOD via Raycast
-config.autoEODOnUnplug = true
+config.autoEODOnUnplug = false
 
 -- Slack Integration (optional)
 -- To enable Slack status updates, you need a Slack User Token (xoxp-...)
@@ -22,16 +22,17 @@ config.autoEODOnUnplug = true
 -- Instead, create ~/.hammerspoon/display-profiles-secrets.lua (see README.md for setup)
 -- The token will be automatically loaded from that file at startup.
 config.slackIntegration = {
-    enabled = false,  -- Set to true to enable Slack integration
+    enabled = true,  -- Set to true to enable Slack integration
     -- Token is loaded from ~/.hammerspoon/display-profiles-secrets.lua
     -- See hammerspoon/display-profiles-secrets.lua.example for template
 
     -- Status messages for each mode
     statuses = {
         work = {
-            text = "At the office",
-            emoji = ":office:",
-            expiration = nil  -- nil means no expiration, or use Unix timestamp
+            text = "",
+            emoji = "",
+            expiration = nil,
+            presence = "auto"  -- "auto" restores active status
         },
         home = {
             text = "Working from home",
@@ -45,8 +46,21 @@ config.slackIntegration = {
         },
         eod = {
             text = "Offline",
-            emoji = ":zzz:",
-            expiration = nil
+            emoji = {":night_with_stars:", ":no_entry:", ":bed:", ":crescent_moon:"},
+            expiration = nil,
+            presence = "away"  -- "away" or "auto"
+        },
+        walk = {
+            text = "Taking a walk",
+            emoji = ":walking:",
+            expirationMinutes = 30,  -- auto-clears after 30 minutes
+            presence = "away"
+        },
+        lunch = {
+            text = "Out to lunch",
+            emoji = {":pizza:", ":hamburger:", ":taco:", ":burrito:", ":ramen:", ":sushi:", ":salad:", ":sandwich:"},
+            expirationMinutes = 60,  -- auto-clears after 1 hour
+            presence = "away"
         }
     }
 }
@@ -57,40 +71,21 @@ config.meetingNotesApp = "Notion"  -- Change to your preferred note-taking app
 -- Options: "Notion", "Obsidian", "Apple Notes", "Evernote", "OneNote", etc.
 
 -- Work Layout (3 displays)
--- Display numbering: 1 = laptop, 2 = first external, 3 = second external
--- Position options: "maximized", "left-half", "right-half", "top-half", "bottom-half", "center", or nil
+-- Display numbering (sorted left to right by x position):
+--   1 = Built-in Retina Display (laptop, x:-1470)
+--   2 = DELL P2217H (1) (center, x:0)
+--   3 = DELL P2217H (2) (right, portrait, x:1920)
+-- Position options: "maximized", "left-half", "right-half", "top-half", "bottom-half", "center"
+--   or custom: {x = ..., y = ..., w = ..., h = ...}
 config.workLayout = {
-    -- Example: Browser on second external display, left half
-    ["Google Chrome"] = {display = 3, position = "maximized"},
-    ["Safari"] = {display = 3, position = "maximized"},
+    -- Communication apps on right monitor (portrait, display 3) - stacked vertically
+    ["Slack"] = {display = 3, position = {x = 1926, y = -191, w = 1066, h = 1043}},
+    ["Microsoft Teams"] = {display = 3, position = {x = 1926, y = 867, w = 1066, h = 818}},
 
-    -- Example: Code editor on first external, maximized
-    ["Visual Studio Code"] = {display = 2, position = "maximized"},
-    ["Cursor"] = {display = 2, position = "maximized"},
+    -- Email on laptop (display 1)
+    ["Microsoft Outlook"] = {display = 1, position = "maximized"},
 
-    -- Example: Communication apps on laptop
-    ["Slack"] = {display = 1, position = "right-half"},
-    ["Microsoft Teams"] = {display = 1, position = "right-half"},
-    ["Messages"] = {display = 1, position = "right-half"},
-
-    -- Example: Terminal on laptop
-    ["Terminal"] = {display = 1, position = "left-half"},
-    ["iTerm2"] = {display = 1, position = "left-half"},
-    ["Warp"] = {display = 1, position = "left-half"},
-
-    -- Example: Email on second external
-    ["Mail"] = {display = 3, position = "maximized"},
-    ["Microsoft Outlook"] = {display = 3, position = "maximized"},
-
-    -- Example: Notes and productivity
-    ["Notion"] = {display = 2, position = "maximized"},
-    ["Obsidian"] = {display = 2, position = "maximized"},
-
-    -- Music/Spotify can go anywhere you prefer
-    ["Spotify"] = {display = 1, position = "bottom-half"},
-    ["Music"] = {display = 1, position = "bottom-half"},
-
-    -- Add your own apps here
+    -- Add your own apps here:
     -- ["App Name"] = {display = 1, position = "maximized"},
 }
 

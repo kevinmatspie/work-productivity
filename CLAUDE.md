@@ -30,8 +30,10 @@ This document provides comprehensive context about the display arrangement autom
   - User interface for mode selection
 
 - **Slack API**: User token-based status updates
-  - Endpoint: `https://slack.com/api/users.profile.set`
-  - Required scope: `users.profile:write`
+  - Profile endpoint: `https://slack.com/api/users.profile.set`
+  - Presence endpoint: `https://slack.com/api/users.setPresence`
+  - Required scopes: `users.profile:write`, `users:write`
+  - **Important**: Must use User OAuth Token (xoxp-), NOT Bot Token (xoxb-)
 
 ## Architecture
 
@@ -45,8 +47,9 @@ Hammerspoon CLI (`hs -c "functionName()"`)
 Hammerspoon Lua Functions
     ↓
 ├─→ Window Arrangement (hs.window, hs.screen APIs)
-├─→ Slack Status Update (hs.http.asyncPost)
-├─→ Disk Ejection (AppleScript via hs.osascript)
+├─→ Slack Status Update (hs.http.asyncPost to users.profile.set)
+├─→ Slack Presence Update (hs.http.asyncPost to users.setPresence)
+├─→ Disk Ejection (Raycast deep link OR AppleScript via hs.osascript)
 └─→ App Activation (hs.application)
 ```
 
@@ -121,12 +124,14 @@ User's home directory (~/.hammerspoon/):
 6. **`moveWindowToScreen(window, screenIndex, position)`**
    - Moves window to specified display
    - Applies positioning: "maximized", "left-half", "right-half", "top-half", "bottom-half", "center"
+   - Also supports custom frame: `{x = ..., y = ..., w = ..., h = ...}` for exact pixel positioning
    - Position "maximized" uses `window:maximize()` - fills screen but NOT macOS full-screen mode
    - Returns success boolean
 
 7. **`arrangeWindows(layout)`**
    - Iterates through layout table
-   - Finds running apps by name (case-sensitive)
+   - Finds running apps by name using `hs.application.find(appName, true)` (exact match)
+   - Checks `app.allWindows` method exists before calling (some objects aren't full app objects)
    - Moves all visible, standard windows for each app
    - Returns counts: (moved, failed)
 
@@ -135,14 +140,22 @@ User's home directory (~/.hammerspoon/):
    - Tells Finder to eject disk if it exists
    - Returns boolean success
 
-9. **`setSlackStatus(statusText, statusEmoji, expiration)`**
+9. **`setSlackPresence(presence)`**
+   - Sets Slack presence to "auto" (active) or "away"
+   - Only proceeds if Slack integration is enabled and token is set
+   - Uses `users.setPresence` API endpoint
+   - Makes async POST to Slack API with Bearer token
+
+10. **`setSlackStatus(statusText, statusEmoji, expiration, presence)`**
    - Only proceeds if `config.slackIntegration.enabled == true`
    - Only proceeds if `config.slackIntegration.token` is set
-   - Builds JSON profile with status_text, status_emoji, status_expiration
+   - Supports random emoji selection: if `statusEmoji` is a table, picks random item
+   - Builds JSON profile wrapped in `{profile: {...}}` (required by Slack API)
    - Makes async POST to Slack API with Bearer token
+   - Optionally sets presence via `setSlackPresence()` if presence parameter provided
    - Logs success/failure to console
 
-10. **`bringAppToForeground(appName)`**
+11. **`bringAppToForeground(appName)`**
     - Finds app by name using `hs.application.find()`
     - Calls `app:activate()` to bring to front
     - Returns boolean success
@@ -170,8 +183,8 @@ User's home directory (~/.hammerspoon/):
 
 4. **`arrangeForEOD()`**
    - Ejects Time Machine disk if `userConfig.timeMachineDisk` is set
-   - Consolidates all windows to laptop screen
-   - Updates Slack status if configured
+   - Note: Current implementation uses Raycast "eject all disks" command instead
+   - Updates Slack status if configured (supports random emoji selection, sets presence to "away")
    - Shows "Safe to unplug!" notification
 
 #### Screen Watcher
@@ -217,13 +230,18 @@ config.meetingNotesApp = "Notion"  -- app name
 
 -- Slack integration (optional)
 config.slackIntegration = {
-    enabled = false,  -- Set to true to enable
+    enabled = true,  -- Set to true to enable
     -- Token is loaded from ~/.hammerspoon/display-profiles-secrets.lua
     statuses = {
-        work = { text = "...", emoji = ":..:", expiration = nil },
-        home = { text = "...", emoji = ":..:", expiration = nil },
-        meeting = { text = "...", emoji = ":..:", expiration = nil },
-        eod = { text = "...", emoji = ":..:", expiration = nil }
+        work = { text = "", emoji = "", expiration = nil, presence = "auto" },  -- clears status, sets active
+        home = { text = "Working from home", emoji = ":house:", expiration = nil },
+        meeting = { text = "In a meeting", emoji = ":calendar:", expiration = nil },
+        eod = {
+            text = "Offline",
+            emoji = {":night_with_stars:", ":no_entry:", ":bed:", ":crescent_moon:"},  -- random selection
+            expiration = nil,
+            presence = "away"
+        }
     }
 }
 
@@ -242,17 +260,25 @@ return config
 #### Layout Configuration Format
 
 ```lua
+-- String position (preset)
 ["App Name"] = {
     display = 1,  -- 1=laptop, 2=first external, 3=second external
     position = "maximized"  -- or "left-half", "right-half", etc.
+}
+
+-- Custom frame position (exact pixel coordinates)
+["Slack"] = {
+    display = 3,
+    position = {x = 1926, y = -191, w = 1066, h = 1043}
 }
 ```
 
 **Important Notes**:
 - App names are case-sensitive (e.g., "Google Chrome", not "chrome")
-- Display numbering is spatial (sorted left-to-right by position)
+- Display numbering is spatial (sorted left-to-right by x-coordinate)
 - Position `nil` means just move to display, don't resize
 - Position "maximized" does NOT enter macOS full-screen mode (just resizes window)
+- Custom frame positions use absolute pixel coordinates (useful for stacking windows)
 
 ### Secrets Management
 
@@ -499,14 +525,34 @@ end
 diskutil list
 ```
 
+### Getting Window Positions
+
+To capture current window positions for custom frame configuration:
+
+```lua
+-- In Hammerspoon Console:
+-- Get all windows for an app with their positions
+local app = hs.application.find("Slack")
+if app then
+    for i, win in ipairs(app:allWindows()) do
+        local f = win:frame()
+        print(string.format("Window %d: x=%d, y=%d, w=%d, h=%d", i, f.x, f.y, f.w, f.h))
+    end
+end
+```
+
 ### Getting Slack Token
 
 1. Go to https://api.slack.com/apps
 2. Create new app or select existing
 3. Navigate to "OAuth & Permissions"
-4. Add `users.profile:write` scope
+4. Under **User Token Scopes**, add:
+   - `users.profile:write` (for status updates)
+   - `users:write` (for presence/away status)
 5. Install app to workspace
 6. Copy "User OAuth Token" (starts with `xoxp-`)
+
+**Important**: You need a **User OAuth Token** (xoxp-), NOT a Bot User OAuth Token (xoxb-). Bot tokens cannot update user profiles.
 
 ## Testing Workflow
 
@@ -636,10 +682,15 @@ diskutil list
 
 **Check**:
 1. `config.slackIntegration.enabled = true`
-2. Token is valid (starts with `xoxp-`)
-3. Token has `users.profile:write` scope
+2. Token is valid (starts with `xoxp-`, NOT `xoxb-`)
+3. Token has `users.profile:write` scope (and `users:write` for presence)
 4. Check Hammerspoon Console for HTTP errors
 5. Network connectivity to Slack API
+
+**Common Slack API Errors**:
+- `not_allowed_token_type`: Using bot token (xoxb-) instead of user token (xoxp-)
+- `invalid_profile`: JSON format issue - must wrap profile in `{profile: {...}}`
+- `missing_scope`: Need to add required scope and reinstall app to workspace
 
 ### Auto-EOD doesn't trigger
 
@@ -678,6 +729,48 @@ diskutil list
 - Meeting notes app foreground activation
 - Comprehensive Slack configuration
 - Full documentation update
+
+### Session 4: Enhanced Slack integration and custom window positions
+- Fixed Slack API JSON format (must wrap profile in `{profile: {...}}`)
+- Added presence/away status support via `users.setPresence` API
+- Added random emoji selection from array for EOD status
+- Added custom pixel-based window positioning support
+- Configured work layout with exact Slack, Teams, Outlook positions
+- Changed EOD disk ejection to use Raycast "eject all disks" deep link
+- Fixed app finding with exact match and allWindows method check
+- Documented user's 3-display configuration (laptop + 2 Dell monitors)
+- Added `users:write` scope requirement for presence API
+
+## User's Display Configuration
+
+**Work Setup (3 displays, sorted by x-coordinate)**:
+- Display 1: Built-in Retina Display (laptop, x:-1470) - leftmost
+- Display 2: DELL P2217H (1) (center, x:0) - center monitor
+- Display 3: DELL P2217H (2) (right, x:1920) - portrait mode, rightmost
+
+**Current Work Layout**:
+```lua
+config.workLayout = {
+    -- Communication apps on right monitor (portrait, display 3) - stacked vertically
+    ["Slack"] = {display = 3, position = {x = 1926, y = -191, w = 1066, h = 1043}},
+    ["Microsoft Teams"] = {display = 3, position = {x = 1926, y = 867, w = 1066, h = 818}},
+
+    -- Email on laptop (display 1)
+    ["Microsoft Outlook"] = {display = 1, position = "maximized"},
+}
+```
+
+**Raycast Deep Links**:
+The EOD script uses Raycast's deep link feature to trigger built-in commands:
+```bash
+# Eject all disks via Raycast
+open "raycast://extensions/raycast/system/eject-all-disks"
+```
+
+This is preferred over Hammerspoon's AppleScript disk ejection because:
+1. Works with all mounted disks, not just named Time Machine disk
+2. User can see Raycast's UI feedback
+3. Consistent with user's existing workflow
 
 ## Development Context for Future Sessions
 
@@ -722,7 +815,9 @@ diskutil list
 - **Hammerspoon API Docs**: https://www.hammerspoon.org/docs/
 - **Hammerspoon Getting Started**: https://www.hammerspoon.org/go/
 - **Raycast Script Commands**: https://github.com/raycast/script-commands
+- **Raycast Deep Links**: https://developers.raycast.com/api-reference/deeplinks
 - **Slack API - User Profile**: https://api.slack.com/methods/users.profile.set
+- **Slack API - User Presence**: https://api.slack.com/methods/users.setPresence
 - **Slack API - Token Types**: https://api.slack.com/authentication/token-types
 
 ## Contact & Support

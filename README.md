@@ -93,6 +93,17 @@ for i, screen in ipairs(hs.screen.allScreens()) do print(i, screen:name()) end
 - `"bottom-half"` - Bottom 50% of screen
 - `"center"` - Centered (keeps current size)
 - `nil` - Just move to display, don't resize
+- `{x = ..., y = ..., w = ..., h = ...}` - Custom pixel position
+
+**Getting current window positions:**
+```lua
+-- In Hammerspoon Console, get positions for an app:
+local app = hs.application.find("Slack")
+for i, win in ipairs(app:allWindows()) do
+    local f = win:frame()
+    print(string.format("x=%d, y=%d, w=%d, h=%d", f.x, f.y, f.w, f.h))
+end
+```
 
 ### 4. Install Raycast Script Commands
 
@@ -149,9 +160,12 @@ To automatically update your Slack status based on mode (work/home/meeting/eod):
    - Sign in to your Slack workspace at [https://api.slack.com/apps](https://api.slack.com/apps)
    - Create a new app or select an existing one
    - Navigate to "OAuth & Permissions"
-   - Add the `users.profile:write` scope
+   - Under **User Token Scopes** (NOT Bot Token Scopes), add:
+     - `users.profile:write` (for status text/emoji)
+     - `users:write` (for presence/away status)
    - Install the app to your workspace
-   - Copy your User OAuth Token (starts with `xoxp-`)
+   - Copy your **User OAuth Token** (starts with `xoxp-`)
+   - **Important**: You need a User token, NOT a Bot token (xoxb-)
 
 2. **Create a secrets file:**
    ```bash
@@ -182,10 +196,15 @@ To automatically update your Slack status based on mode (work/home/meeting/eod):
        -- Token is loaded from ~/.hammerspoon/display-profiles-secrets.lua
 
        statuses = {
-           work = { text = "At the office", emoji = ":office:", expiration = nil },
+           work = { text = "", emoji = "", expiration = nil, presence = "auto" },  -- clears status, sets active
            home = { text = "Working from home", emoji = ":house:", expiration = nil },
            meeting = { text = "In a meeting", emoji = ":calendar:", expiration = nil },
-           eod = { text = "Offline", emoji = ":zzz:", expiration = nil }
+           eod = {
+               text = "Offline",
+               emoji = {":night_with_stars:", ":no_entry:", ":bed:", ":crescent_moon:"},  -- random selection!
+               expiration = nil,
+               presence = "away"
+           }
        }
    }
    ```
@@ -345,7 +364,17 @@ You can create additional profiles for other scenarios:
 
 ### Position Options
 
-You can create custom positions by modifying the `moveWindowToScreen` function in `init.lua`. For example, quarter-screen layouts or specific pixel dimensions.
+Custom pixel positions are supported directly in the config:
+
+```lua
+config.workLayout = {
+    -- Stack windows vertically on portrait monitor
+    ["Slack"] = {display = 3, position = {x = 1926, y = -191, w = 1066, h = 1043}},
+    ["Microsoft Teams"] = {display = 3, position = {x = 1926, y = 867, w = 1066, h = 818}},
+}
+```
+
+You can also add new position presets by modifying the `moveWindowToScreen` function in `init.lua`.
 
 ## Limitations
 

@@ -10,9 +10,12 @@
 # @raycast.packageName Display Manager
 
 # Documentation:
-# @raycast.description Prepare for unplugging: eject Time Machine, move all windows to laptop display
+# @raycast.description Prepare for unplugging: eject all disks, set Slack status to away
 # @raycast.author Your Name
 # @raycast.authorURL https://github.com/yourusername
 
-# Trigger Hammerspoon to prepare for end of day
+# Eject all disks via Raycast
+open "raycast://extensions/raycast/system/eject-all-disks"
+
+# Trigger Hammerspoon to set Slack status
 /usr/local/bin/hs -c "arrangeForEOD()"

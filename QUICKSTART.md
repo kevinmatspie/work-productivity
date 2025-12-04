@@ -65,9 +65,9 @@ Open Raycast and type:
 ## Next Steps
 
 - [ ] Plug into your work docking station and run "work" command
-- [ ] Adjust window positions in the config file as needed
-- [ ] Set your Time Machine disk name in config (if applicable)
-- [ ] Configure Slack integration for automatic status updates (optional - see README)
+- [ ] Capture current window positions using Hammerspoon Console (see README)
+- [ ] Adjust window positions in the config file (supports custom pixel positions)
+- [ ] Configure Slack integration for automatic status/presence updates (optional - see README)
 - [ ] Set your preferred note-taking app for meeting mode
 - [ ] Create keyboard shortcuts in Raycast for even faster access
 
@@ -90,7 +90,7 @@ Open Raycast and type:
 
 2. **Meeting mode:** Perfect for unplugged meetings - consolidates windows and brings your note-taking app forward. Set `config.meetingNotesApp` to your preferred app.
 
-3. **Slack integration:** Enable automatic status updates to let your team know when you're at the office, WFH, in a meeting, or offline. See README for setup instructions.
+3. **Slack integration:** Enable automatic status updates (requires User OAuth Token with `users.profile:write` and `users:write` scopes). Supports random emoji selection and away/active presence. See README for setup instructions.
 
 4. **Keyboard shortcuts:** In Raycast, right-click each command and assign a hotkey for even faster access (e.g., Cmd+Shift+W for work setup)
 
