@@ -15,4 +15,4 @@
 # @raycast.authorURL https://github.com/yourusername
 
 # Trigger Hammerspoon to set Slack status and lock screen
-/usr/local/bin/hs -c "arrangeForLunch()"
+/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "arrangeForLunch()"

@@ -18,4 +18,4 @@
 open "raycast://extensions/raycast/system/eject-all-disks"
 
 # Trigger Hammerspoon to set Slack status
-/usr/local/bin/hs -c "arrangeForEOD()"
+/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "arrangeForEOD()"

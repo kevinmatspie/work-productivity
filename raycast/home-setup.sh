@@ -15,4 +15,4 @@
 # @raycast.authorURL https://github.com/yourusername
 
 # Trigger Hammerspoon to arrange windows for home
-/usr/local/bin/hs -c "arrangeForHome()"
+/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "arrangeForHome()"

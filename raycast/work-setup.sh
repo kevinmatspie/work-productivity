@@ -15,4 +15,4 @@
 # @raycast.authorURL https://github.com/yourusername
 
 # Trigger Hammerspoon to arrange windows for work
-/usr/local/bin/hs -c "arrangeForWork()"
+/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "arrangeForWork()"

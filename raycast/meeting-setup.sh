@@ -18,4 +18,4 @@
 open "raycast://extensions/raycast/system/eject-all-disks"
 
 # Trigger Hammerspoon to arrange for meeting
-/usr/local/bin/hs -c "arrangeForMeeting()"
+/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "arrangeForMeeting()"
