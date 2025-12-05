@@ -227,6 +227,12 @@ local function setSlackStatus(statusText, statusEmoji, expiration, presence)
 
     local token = userConfig.slackIntegration.token
 
+    -- Support text as string or table (random selection from table)
+    local selectedText = statusText
+    if type(statusText) == "table" then
+        selectedText = statusText[math.random(#statusText)]
+    end
+
     -- Support emoji as string or table (random selection from table)
     local selectedEmoji = statusEmoji
     if type(statusEmoji) == "table" then
@@ -235,7 +241,7 @@ local function setSlackStatus(statusText, statusEmoji, expiration, presence)
 
     -- Build the status profile JSON
     local profile = {
-        status_text = statusText or "",
+        status_text = selectedText or "",
         status_emoji = selectedEmoji or "",
     }
 
@@ -258,7 +264,7 @@ local function setSlackStatus(statusText, statusEmoji, expiration, presence)
         if status == 200 then
             local response = hs.json.decode(body)
             if response and response.ok then
-                log(string.format("Slack status updated: %s %s", selectedEmoji, statusText))
+                log(string.format("Slack status updated: %s %s", selectedEmoji, selectedText))
             else
                 log(string.format("Slack API error: %s", response.error or "unknown"))
             end
@@ -428,10 +434,20 @@ function arrangeForWalk()
         local status = userConfig.slackIntegration.statuses.walk
         -- Calculate expiration timestamp from minutes
         local expiration = nil
+        local expirationSeconds = nil
         if status.expirationMinutes then
-            expiration = os.time() + (status.expirationMinutes * 60)
+            expirationSeconds = status.expirationMinutes * 60
+            expiration = os.time() + expirationSeconds
         end
         setSlackStatus(status.text, status.emoji, expiration, status.presence)
+
+        -- Schedule presence restoration when status expires
+        if expirationSeconds and status.presence == "away" then
+            hs.timer.doAfter(expirationSeconds, function()
+                log("Walk timer expired - restoring presence to auto")
+                setSlackPresence("auto")
+            end)
+        end
     end
 
     notify("Walk Setup Complete", "Screen will lock. Status clears in 30 min.")
@@ -451,10 +467,20 @@ function arrangeForLunch()
         local status = userConfig.slackIntegration.statuses.lunch
         -- Calculate expiration timestamp from minutes
         local expiration = nil
+        local expirationSeconds = nil
         if status.expirationMinutes then
-            expiration = os.time() + (status.expirationMinutes * 60)
+            expirationSeconds = status.expirationMinutes * 60
+            expiration = os.time() + expirationSeconds
         end
         setSlackStatus(status.text, status.emoji, expiration, status.presence)
+
+        -- Schedule presence restoration when status expires
+        if expirationSeconds and status.presence == "away" then
+            hs.timer.doAfter(expirationSeconds, function()
+                log("Lunch timer expired - restoring presence to auto")
+                setSlackPresence("auto")
+            end)
+        end
     end
 
     notify("Lunch Setup Complete", "Screen will lock. Status clears in 1 hour.")

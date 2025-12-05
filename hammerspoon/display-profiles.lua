@@ -40,9 +40,10 @@ config.slackIntegration = {
             expiration = nil
         },
         meeting = {
-            text = "In a meeting",
-            emoji = ":calendar:",
-            expiration = nil  -- You could set this to auto-expire after 1 hour
+            text = {"In a meeting...", "Syncing with humans...", "Currently in a meeting...", "˙˙˙ƃuᴉʇǝǝɯ ɐ uI", "In meetings, send help!"},
+            emoji = {":calendar-fire:", ":spiral_calendar_pad:", ":waiting-patiently:", ":waiting-clock:", ":spiral_note_pad:", ":pencil:"},
+            expiration = nil,  -- You could set this to auto-expire after 1 hour
+            presence = "away"
         },
         eod = {
             text = "Offline",
@@ -67,8 +68,8 @@ config.slackIntegration = {
 
 -- Meeting mode settings
 -- App to bring to foreground when entering meeting mode
-config.meetingNotesApp = "Notion"  -- Change to your preferred note-taking app
--- Options: "Notion", "Obsidian", "Apple Notes", "Evernote", "OneNote", etc.
+config.meetingNotesApp = "Notes"  -- Apple Notes
+-- Options: "Notes" (Apple), "Notion", "Obsidian", "Evernote", "OneNote", etc.
 
 -- Work Layout (3 displays)
 -- Display numbering (sorted left to right by x position):
@@ -125,20 +126,16 @@ config.homeLayout = {
 -- Display numbering: 1 = laptop (all windows will be on laptop for meetings)
 -- This layout is used when you trigger "meeting" mode
 config.meetingLayout = {
-    -- Example: Video conferencing on left, notes on right
-    ["Zoom"] = {display = 1, position = "left-half"},
-    ["Google Meet"] = {display = 1, position = "left-half"},
-    ["Microsoft Teams"] = {display = 1, position = "left-half"},
+    -- Notes app maximized on laptop
+    ["Notes"] = {display = 1, position = "maximized"},
 
-    -- Note-taking app will be brought to foreground (specified in meetingNotesApp)
-    ["Notion"] = {display = 1, position = "right-half"},
-    ["Obsidian"] = {display = 1, position = "right-half"},
+    -- Example: Video conferencing on left, notes on right
+    -- ["Zoom"] = {display = 1, position = "left-half"},
+    -- ["Google Meet"] = {display = 1, position = "left-half"},
+    -- ["Microsoft Teams"] = {display = 1, position = "left-half"},
 
     -- Keep Slack visible for messages
-    ["Slack"] = {display = 1, position = "right-half"},
-
-    -- Browser can be minimized or kept in background
-    -- ["Google Chrome"] = {display = 1, position = "maximized"},
+    -- ["Slack"] = {display = 1, position = "right-half"},
 
     -- Add your own apps here
     -- ["App Name"] = {display = 1, position = "maximized"},
