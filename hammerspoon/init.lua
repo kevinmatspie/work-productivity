@@ -453,6 +453,15 @@ function arrangeForWalk()
     notify("Walk Setup Complete", "Screen will lock. Status clears in 30 min.")
     log("Walk setup complete")
 
+    -- Prevent system sleep for 30 minutes to allow Time Machine backups to complete
+    local walkDuration = 30 * 60  -- 30 minutes in seconds
+    hs.caffeinate.set("systemIdle", true, true)
+    log("Caffeinate assertion set - preventing system sleep for 30 minutes")
+    hs.timer.doAfter(walkDuration, function()
+        hs.caffeinate.set("systemIdle", false, true)
+        log("Caffeinate assertion released - system can sleep normally")
+    end)
+
     -- Lock the screen after a brief delay for notification to show
     hs.timer.doAfter(1, function()
         hs.caffeinate.lockScreen()
@@ -485,6 +494,15 @@ function arrangeForLunch()
 
     notify("Lunch Setup Complete", "Screen will lock. Status clears in 1 hour.")
     log("Lunch setup complete")
+
+    -- Prevent system sleep for 1 hour to allow Time Machine backups to complete
+    local lunchDuration = 60 * 60  -- 1 hour in seconds
+    hs.caffeinate.set("systemIdle", true, true)
+    log("Caffeinate assertion set - preventing system sleep for 1 hour")
+    hs.timer.doAfter(lunchDuration, function()
+        hs.caffeinate.set("systemIdle", false, true)
+        log("Caffeinate assertion released - system can sleep normally")
+    end)
 
     -- Lock the screen after a brief delay for notification to show
     hs.timer.doAfter(1, function()
