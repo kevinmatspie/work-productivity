@@ -291,6 +291,106 @@ local function bringAppToForeground(appName)
     end
 end
 
+-- Check if current time is within the morning window
+local function isWithinMorningWindow()
+    local currentHour = tonumber(os.date("%H"))
+    local startHour = userConfig.morningWindowStart or 7
+    local endHour = userConfig.morningWindowEnd or 10
+    return currentHour >= startHour and currentHour < endHour
+end
+
+-- Set Slack status with retry logic (exponential backoff)
+-- Calls callback(success) when complete
+local function setSlackStatusWithRetry(statusText, statusEmoji, expiration, presence, callback)
+    -- Only proceed if Slack integration is enabled and token is configured
+    if not userConfig.slackIntegration or not userConfig.slackIntegration.enabled then
+        log("Slack integration disabled, skipping status update")
+        if callback then callback(true) end  -- Consider disabled as success
+        return
+    end
+
+    if not userConfig.slackIntegration.token then
+        log("Slack token not configured, skipping status update")
+        if callback then callback(true) end  -- Consider unconfigured as success
+        return
+    end
+
+    local token = userConfig.slackIntegration.token
+    local maxRetries = 3
+    local retryDelays = {5, 10, 20}  -- Exponential backoff: 5s, 10s, 20s
+
+    -- Support text as string or table (random selection from table)
+    local selectedText = statusText
+    if type(statusText) == "table" then
+        selectedText = statusText[math.random(#statusText)]
+    end
+
+    -- Support emoji as string or table (random selection from table)
+    local selectedEmoji = statusEmoji
+    if type(statusEmoji) == "table" then
+        selectedEmoji = statusEmoji[math.random(#statusEmoji)]
+    end
+
+    -- Build the status profile JSON
+    local profile = {
+        status_text = selectedText or "",
+        status_emoji = selectedEmoji or "",
+    }
+
+    -- Add expiration if provided (Unix timestamp)
+    if expiration then
+        profile.status_expiration = expiration
+    end
+
+    -- Convert to JSON - Slack expects {profile: {...}}
+    local profileJson = hs.json.encode({profile = profile})
+
+    local url = "https://slack.com/api/users.profile.set"
+    local headers = {
+        ["Authorization"] = "Bearer " .. token,
+        ["Content-Type"] = "application/json; charset=utf-8"
+    }
+
+    local function attemptSlackUpdate(attemptNum)
+        log(string.format("Slack status update attempt %d/%d", attemptNum, maxRetries))
+
+        hs.http.asyncPost(url, profileJson, headers, function(status, body, respHeaders)
+            if status == 200 then
+                local response = hs.json.decode(body)
+                if response and response.ok then
+                    log(string.format("Slack status updated: %s %s", selectedEmoji, selectedText))
+                    -- Set presence if specified
+                    if presence then
+                        setSlackPresence(presence)
+                    end
+                    if callback then callback(true) end
+                    return
+                else
+                    log(string.format("Slack API error: %s", response and response.error or "unknown"))
+                end
+            else
+                log(string.format("Slack HTTP error: %d", status or 0))
+            end
+
+            -- Retry if we haven't exhausted attempts
+            if attemptNum < maxRetries then
+                local delay = retryDelays[attemptNum] or 5
+                log(string.format("Retrying Slack update in %d seconds...", delay))
+                hs.timer.doAfter(delay, function()
+                    attemptSlackUpdate(attemptNum + 1)
+                end)
+            else
+                log("Slack status update failed after 3 attempts")
+                notify("Slack Update Failed", "Could not update Slack status after 3 attempts")
+                if callback then callback(false) end
+            end
+        end)
+    end
+
+    -- Start first attempt
+    attemptSlackUpdate(1)
+end
+
 -- Main Functions
 
 function arrangeForWork()
@@ -510,9 +610,40 @@ function arrangeForLunch()
     end)
 end
 
--- Screen Watcher for Automatic Unplug Detection
+-- Screen Watcher for Automatic Display Detection
 local screenWatcher = nil
 local previousDisplayCount = getDisplayCount()
+
+-- Auto-work function that arranges windows first, then updates Slack with retry
+local function autoArrangeForWork()
+    log("Auto-arranging for work setup (3 displays)...")
+    local displayCount = getDisplayCount()
+
+    if displayCount < 3 then
+        notify("Display Arrangement",
+               string.format("Warning: Only %d display(s) detected. Expected 3 for work setup.", displayCount))
+        return
+    end
+
+    -- Window arrangement takes priority - do this first
+    local moved, failed = arrangeWindows(userConfig.workLayout)
+    log(string.format("Work arrangement complete: %d moved, %d failed", moved, failed))
+
+    notify("Work Setup Complete",
+           string.format("Arranged %d window(s) across 3 displays", moved))
+
+    -- Set Slack status with retry logic (network may still be connecting)
+    if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.work then
+        local status = userConfig.slackIntegration.statuses.work
+        setSlackStatusWithRetry(status.text, status.emoji, status.expiration, status.presence, function(success)
+            if success then
+                log("Slack status updated successfully")
+            else
+                log("Slack status update failed after retries")
+            end
+        end)
+    end
+end
 
 local function handleDisplayChange()
     local currentDisplayCount = getDisplayCount()
@@ -533,22 +664,63 @@ local function handleDisplayChange()
         end
     end
 
+    -- Check if we've plugged in (display count increased to 3)
+    if currentDisplayCount > previousDisplayCount then
+        if currentDisplayCount == 3 and userConfig.autoWorkOnPlug then
+            -- Check morning window if morningOnlyAutoWork is enabled
+            local shouldTrigger = true
+            if userConfig.morningOnlyAutoWork then
+                if isWithinMorningWindow() then
+                    log("Within morning window - auto-work will trigger")
+                else
+                    log("Outside morning window - skipping auto-work")
+                    shouldTrigger = false
+                end
+            end
+
+            if shouldTrigger then
+                log("Plugging into 3 displays detected - triggering automatic Work setup")
+
+                -- 3 second delay for DisplayLink and network to stabilize
+                hs.timer.doAfter(3, function()
+                    autoArrangeForWork()
+                end)
+            end
+        end
+    end
+
     previousDisplayCount = currentDisplayCount
 end
 
--- Initialize screen watcher if auto-EOD is enabled
-if userConfig.autoEODOnUnplug then
+-- Initialize screen watcher if either auto-EOD or auto-work is enabled
+local watcherNeeded = userConfig.autoEODOnUnplug or userConfig.autoWorkOnPlug
+if watcherNeeded then
     screenWatcher = hs.screen.watcher.new(handleDisplayChange)
     screenWatcher:start()
-    log("Automatic EOD on unplug: ENABLED")
+    log("Screen watcher: ENABLED")
+    if userConfig.autoEODOnUnplug then
+        log("  - Automatic EOD on unplug: ENABLED")
+    end
+    if userConfig.autoWorkOnPlug then
+        local modeDesc = userConfig.morningOnlyAutoWork
+            and string.format("morning only (%d:00-%d:00)", userConfig.morningWindowStart or 7, userConfig.morningWindowEnd or 10)
+            or "any time"
+        log(string.format("  - Automatic Work on plug-in: ENABLED (%s)", modeDesc))
+    end
 else
-    log("Automatic EOD on unplug: DISABLED")
+    log("Screen watcher: DISABLED (no auto features enabled)")
 end
 
 -- Set up CLI for Raycast integration
 hs.ipc.cliInstall()
 
 -- Show notification on load
-local statusMsg = userConfig.autoEODOnUnplug and "Auto-EOD enabled" or "Manual mode"
+local features = {}
+if userConfig.autoEODOnUnplug then table.insert(features, "Auto-EOD") end
+if userConfig.autoWorkOnPlug then
+    local modeDesc = userConfig.morningOnlyAutoWork and "AM" or "always"
+    table.insert(features, string.format("Auto-Work(%s)", modeDesc))
+end
+local statusMsg = #features > 0 and table.concat(features, ", ") or "Manual mode"
 notify("Display Manager", string.format("Hammerspoon loaded - %s", statusMsg))
 log("Display arrangement module loaded successfully")

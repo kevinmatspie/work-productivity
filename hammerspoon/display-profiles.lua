@@ -13,6 +13,16 @@ config.timeMachineDisk = nil  -- Disk ejection handled by Raycast "eject all dis
 -- Set to false if you prefer to manually trigger EOD via Raycast
 config.autoEODOnUnplug = false
 
+-- Automatic Work setup on plug-in
+-- When set to true, automatically runs Work setup when 3 displays are detected
+config.autoWorkOnPlug = true
+-- When set to true, only auto-trigger during morning hours (see window below)
+-- When false, auto-trigger any time 3 displays are detected
+config.morningOnlyAutoWork = false
+-- Morning window hours (24-hour format)
+config.morningWindowStart = 7   -- 7:00 AM
+config.morningWindowEnd = 10    -- 10:00 AM
+
 -- Slack Integration (optional)
 -- To enable Slack status updates, you need a Slack User Token (xoxp-...)
 -- Get your token from: https://api.slack.com/authentication/token-types#user
