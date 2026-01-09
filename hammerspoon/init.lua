@@ -711,6 +711,54 @@ else
     log("Screen watcher: DISABLED (no auto features enabled)")
 end
 
+-- Wake Watcher for "wake while docked" scenario
+-- Handles the case where Mac wakes from sleep already connected to dock
+local wakeWatcher = nil
+
+local function handleWakeEvent(event)
+    if event == hs.caffeinate.watcher.systemDidWake then
+        log("System woke from sleep")
+
+        -- Only proceed if auto-work is enabled
+        if not userConfig.autoWorkOnPlug then
+            return
+        end
+
+        -- Delay to let displays and network stabilize after wake
+        hs.timer.doAfter(5, function()
+            local displayCount = getDisplayCount()
+            log(string.format("Post-wake check: %d displays detected", displayCount))
+
+            if displayCount == 3 then
+                -- Check morning window if morningOnlyAutoWork is enabled
+                local shouldTrigger = true
+                if userConfig.morningOnlyAutoWork then
+                    if isWithinMorningWindow() then
+                        log("Within morning window - auto-work will trigger after wake")
+                    else
+                        log("Outside morning window - skipping auto-work after wake")
+                        shouldTrigger = false
+                    end
+                end
+
+                if shouldTrigger then
+                    log("Woke with 3 displays - triggering automatic Work setup")
+                    autoArrangeForWork()
+                end
+            else
+                log(string.format("Woke with %d displays - no auto-work needed", displayCount))
+            end
+        end)
+    end
+end
+
+-- Initialize wake watcher if auto-work is enabled
+if userConfig.autoWorkOnPlug then
+    wakeWatcher = hs.caffeinate.watcher.new(handleWakeEvent)
+    wakeWatcher:start()
+    log("Wake watcher: ENABLED (for wake-while-docked detection)")
+end
+
 -- Set up CLI for Raycast integration
 hs.ipc.cliInstall()
 
