@@ -478,8 +478,16 @@ function arrangeForEOD()
         setSlackStatus(status.text, status.emoji, status.expiration, status.presence)
     end
 
-    notify("EOD Setup Complete", "Safe to unplug!")
+    -- Show initial notification, then delay before "Safe to unplug"
+    -- This gives time for disk ejection (triggered by Raycast) to complete
+    notify("EOD Setup", "Ejecting disks...")
     log(string.format("EOD arrangement complete: %d windows moved to primary display", moved))
+
+    -- Wait 10 seconds for disk ejection to complete before showing "Safe to unplug"
+    hs.timer.doAfter(10, function()
+        notify("EOD Setup Complete", "Safe to unplug!")
+        log("Disk ejection delay complete - safe to unplug")
+    end)
 end
 
 function arrangeForMeeting()
