@@ -721,41 +721,69 @@ end
 
 -- Wake Watcher for "wake while docked" scenario
 -- Handles the case where Mac wakes from sleep already connected to dock
+-- Watches multiple events because systemDidWake may not fire after hibernate (FileVault)
 local wakeWatcher = nil
+local lastWakeCheck = 0  -- Prevent duplicate triggers within short time
+
+local function checkAndTriggerAutoWork(source)
+    -- Debounce: Don't trigger if we just checked within the last 30 seconds
+    local now = os.time()
+    if now - lastWakeCheck < 30 then
+        log(string.format("Skipping %s check - already checked %d seconds ago", source, now - lastWakeCheck))
+        return
+    end
+    lastWakeCheck = now
+
+    -- Only proceed if auto-work is enabled
+    if not userConfig.autoWorkOnPlug then
+        return
+    end
+
+    local displayCount = getDisplayCount()
+    log(string.format("%s: %d displays detected", source, displayCount))
+
+    if displayCount == 3 then
+        -- Check morning window if morningOnlyAutoWork is enabled
+        local shouldTrigger = true
+        if userConfig.morningOnlyAutoWork then
+            if isWithinMorningWindow() then
+                log("Within morning window - auto-work will trigger")
+            else
+                log("Outside morning window - skipping auto-work")
+                shouldTrigger = false
+            end
+        end
+
+        if shouldTrigger then
+            log(string.format("%s with 3 displays - triggering automatic Work setup", source))
+            autoArrangeForWork()
+        end
+    else
+        log(string.format("%s with %d displays - no auto-work needed", source, displayCount))
+    end
+end
 
 local function handleWakeEvent(event)
-    if event == hs.caffeinate.watcher.systemDidWake then
-        log("System woke from sleep")
+    -- Handle multiple wake-related events for better coverage
+    -- systemDidWake: Standard wake from sleep
+    -- screensDidWake: Displays woke up (may fire when systemDidWake doesn't)
+    -- screenIsUnlocked: User unlocked the screen (catches hibernate/FileVault scenario)
 
-        -- Only proceed if auto-work is enabled
-        if not userConfig.autoWorkOnPlug then
-            return
-        end
+    local eventName = nil
+    if event == hs.caffeinate.watcher.systemDidWake then
+        eventName = "System wake"
+    elseif event == hs.caffeinate.watcher.screensDidWake then
+        eventName = "Screens wake"
+    elseif event == hs.caffeinate.watcher.screenIsUnlocked then
+        eventName = "Screen unlocked"
+    end
+
+    if eventName then
+        log(string.format("Wake event: %s", eventName))
 
         -- Delay to let displays and network stabilize after wake
         hs.timer.doAfter(5, function()
-            local displayCount = getDisplayCount()
-            log(string.format("Post-wake check: %d displays detected", displayCount))
-
-            if displayCount == 3 then
-                -- Check morning window if morningOnlyAutoWork is enabled
-                local shouldTrigger = true
-                if userConfig.morningOnlyAutoWork then
-                    if isWithinMorningWindow() then
-                        log("Within morning window - auto-work will trigger after wake")
-                    else
-                        log("Outside morning window - skipping auto-work after wake")
-                        shouldTrigger = false
-                    end
-                end
-
-                if shouldTrigger then
-                    log("Woke with 3 displays - triggering automatic Work setup")
-                    autoArrangeForWork()
-                end
-            else
-                log(string.format("Woke with %d displays - no auto-work needed", displayCount))
-            end
+            checkAndTriggerAutoWork(eventName)
         end)
     end
 end
@@ -764,7 +792,7 @@ end
 if userConfig.autoWorkOnPlug then
     wakeWatcher = hs.caffeinate.watcher.new(handleWakeEvent)
     wakeWatcher:start()
-    log("Wake watcher: ENABLED (for wake-while-docked detection)")
+    log("Wake watcher: ENABLED (systemDidWake, screensDidWake, screenIsUnlocked)")
 end
 
 -- Set up CLI for Raycast integration
@@ -780,3 +808,13 @@ end
 local statusMsg = #features > 0 and table.concat(features, ", ") or "Manual mode"
 notify("Display Manager", string.format("Hammerspoon loaded - %s", statusMsg))
 log("Display arrangement module loaded successfully")
+
+-- Startup check: If we load with 3 displays already connected, trigger auto-work
+-- This handles the hibernate/FileVault scenario where Hammerspoon loads after
+-- the system has already woken and displays are connected
+if userConfig.autoWorkOnPlug then
+    -- Short delay to let everything initialize
+    hs.timer.doAfter(3, function()
+        checkAndTriggerAutoWork("Startup check")
+    end)
+end
