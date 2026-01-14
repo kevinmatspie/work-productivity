@@ -60,14 +60,39 @@ Display Count Change Event
     ↓
 Screen Watcher Callback
     ↓
-Check: Did displays decrease?
-    ↓
-Check: Down to 1 display (laptop only)?
-    ↓
-Check: autoEODOnUnplug enabled?
-    ↓
-Trigger arrangeForEOD() after 1s delay
+├─→ Displays decreased to 1? → Trigger arrangeForEOD() (if enabled)
+└─→ Displays increased to 3? → Trigger autoArrangeForWork() (if enabled)
 ```
+
+### Wake Watcher for Sleep/Wake Detection
+
+```
+Wake Event (systemDidWake, screensDidWake, screenIsUnlocked)
+    ↓
+Wait 5 seconds for displays/network to stabilize
+    ↓
+Check: 3 displays detected?
+    ↓
+Check: Within morning window? (if morningOnlyAutoWork enabled)
+    ↓
+Trigger autoArrangeForWork()
+```
+
+### Startup Check for Hibernate/FileVault
+
+```
+Hammerspoon Loads
+    ↓
+Wait 3 seconds for initialization
+    ↓
+Check: 3 displays detected?
+    ↓
+Check: Within morning window? (if morningOnlyAutoWork enabled)
+    ↓
+Trigger autoArrangeForWork()
+```
+
+**Why startup check is needed**: With FileVault enabled (standard on Macs), when waking from hibernate the drive is locked and Hammerspoon isn't running yet. By the time Hammerspoon loads, the wake event has already passed. The startup check catches this scenario.
 
 ## Implementation Details
 
@@ -76,14 +101,16 @@ Trigger arrangeForEOD() after 1s delay
 ```
 work-productivity/
 ├── hammerspoon/
-│   ├── init.lua                              # Main automation logic (420 lines)
-│   ├── display-profiles.lua                  # User configuration file (158 lines)
+│   ├── init.lua                              # Main automation logic (~800 lines)
+│   ├── display-profiles.lua                  # User configuration file
 │   └── display-profiles-secrets.lua.example  # Secrets template (not used directly)
 ├── raycast/
 │   ├── work-setup.sh              # Triggers arrangeForWork()
 │   ├── home-setup.sh              # Triggers arrangeForHome()
 │   ├── meeting-setup.sh           # Triggers arrangeForMeeting()
-│   └── eod-setup.sh               # Triggers arrangeForEOD()
+│   ├── eod-setup.sh               # Triggers arrangeForEOD()
+│   ├── walk-setup.sh              # Triggers arrangeForWalk()
+│   └── lunch-setup.sh             # Triggers arrangeForLunch()
 ├── .gitignore                     # Excludes secrets file from version control
 ├── README.md                      # Full documentation
 ├── QUICKSTART.md                  # 5-minute setup guide
@@ -95,6 +122,9 @@ User's home directory (~/.hammerspoon/):
 └── display-profiles-secrets.lua   # Created by user (NOT in git repo)
                                    # Contains sensitive API tokens
                                    # Permissions: 600 (user read/write only)
+
+User's Raycast scripts directory:
+~/bin/raycast/                     # User's preferred location for Raycast scripts
 ```
 
 ### Core Functions (hammerspoon/init.lua)
@@ -185,36 +215,105 @@ User's home directory (~/.hammerspoon/):
    - Ejects Time Machine disk if `userConfig.timeMachineDisk` is set
    - Note: Current implementation uses Raycast "eject all disks" command instead
    - Updates Slack status if configured (supports random emoji selection, sets presence to "away")
-   - Shows "Safe to unplug!" notification
+   - Shows "Ejecting disks..." notification immediately
+   - Shows "Safe to unplug!" notification after 10-second delay (allows disk ejection to complete)
+
+5. **`arrangeForWalk()`**
+   - Sets Slack status with 30-minute expiration
+   - Sets Slack presence to "away"
+   - Prevents system sleep for 30 minutes (allows Time Machine backups)
+   - Locks screen after 1-second delay
+   - Restores presence to "auto" when status expires
+
+6. **`arrangeForLunch()`**
+   - Sets Slack status with 1-hour expiration
+   - Sets Slack presence to "away"
+   - Prevents system sleep for 1 hour (allows Time Machine backups)
+   - Locks screen after 1-second delay
+   - Restores presence to "auto" when status expires
+
+#### Auto-Work Function
+
+**`autoArrangeForWork()`**
+- Used by screen watcher, wake watcher, and startup check
+- Arranges windows first (priority), then updates Slack
+- Uses `setSlackStatusWithRetry()` for network resilience
+
+#### Slack Retry Helper
+
+**`setSlackStatusWithRetry(statusText, statusEmoji, expiration, presence, callback)`**
+- Exponential backoff: 5s → 10s → 20s between retries
+- Maximum 3 attempts
+- Shows notification on final failure
+- Used for auto-work when network may still be connecting after wake
 
 #### Screen Watcher
 
-```lua
-local screenWatcher = nil
-local previousDisplayCount = getDisplayCount()
+Detects display count changes for auto-EOD (unplug) and auto-Work (plug-in):
 
+```lua
 local function handleDisplayChange()
     local currentDisplayCount = getDisplayCount()
 
-    -- Only trigger if displays decreased and we're down to 1
+    -- Auto-EOD: Displays decreased to 1
     if currentDisplayCount < previousDisplayCount then
         if currentDisplayCount == 1 and userConfig.autoEODOnUnplug then
-            -- 1 second delay for macOS to finish display changes
             hs.timer.doAfter(1, function()
                 arrangeForEOD()
             end)
         end
     end
 
+    -- Auto-Work: Displays increased to 3
+    if currentDisplayCount > previousDisplayCount then
+        if currentDisplayCount == 3 and userConfig.autoWorkOnPlug then
+            -- Check morning window if enabled
+            if not userConfig.morningOnlyAutoWork or isWithinMorningWindow() then
+                hs.timer.doAfter(3, function()  -- 3s delay for DisplayLink
+                    autoArrangeForWork()
+                end)
+            end
+        end
+    end
+
     previousDisplayCount = currentDisplayCount
 end
+```
 
--- Only start watcher if enabled
-if userConfig.autoEODOnUnplug then
-    screenWatcher = hs.screen.watcher.new(handleDisplayChange)
-    screenWatcher:start()
+#### Wake Watcher
+
+Handles wake-from-sleep scenarios. Watches multiple events for better coverage:
+- `systemDidWake` - Standard wake from sleep
+- `screensDidWake` - Displays woke up
+- `screenIsUnlocked` - User unlocked screen (catches hibernate/FileVault)
+
+```lua
+local function handleWakeEvent(event)
+    if event == hs.caffeinate.watcher.systemDidWake or
+       event == hs.caffeinate.watcher.screensDidWake or
+       event == hs.caffeinate.watcher.screenIsUnlocked then
+        -- 5 second delay for displays/network to stabilize
+        hs.timer.doAfter(5, function()
+            checkAndTriggerAutoWork(eventName)
+        end)
+    end
 end
 ```
+
+#### Startup Check
+
+Catches hibernate/FileVault scenario where Hammerspoon loads after wake:
+
+```lua
+-- On Hammerspoon load, check if already at 3 displays
+if userConfig.autoWorkOnPlug then
+    hs.timer.doAfter(3, function()
+        checkAndTriggerAutoWork("Startup check")
+    end)
+end
+```
+
+**Debounce Logic**: A 30-second debounce prevents duplicate triggers when multiple wake events fire in quick succession.
 
 ### Configuration (hammerspoon/display-profiles.lua)
 
@@ -224,33 +323,52 @@ end
 local config = {}
 
 -- Settings
-config.timeMachineDisk = "Time Machine"  -- or nil
-config.autoEODOnUnplug = true  -- or false
-config.meetingNotesApp = "Notion"  -- app name
+config.timeMachineDisk = nil  -- Disk ejection handled by Raycast "eject all disks"
+config.autoEODOnUnplug = false  -- Auto-EOD when unplugging to 1 display
+config.meetingNotesApp = "Notes"  -- Apple Notes for meeting mode
+
+-- Auto-Work settings
+config.autoWorkOnPlug = true  -- Auto-work when plugging into 3 displays
+config.morningOnlyAutoWork = false  -- false = any time, true = morning window only
+config.morningWindowStart = 7   -- 7:00 AM
+config.morningWindowEnd = 10    -- 10:00 AM
 
 -- Slack integration (optional)
 config.slackIntegration = {
-    enabled = true,  -- Set to true to enable
+    enabled = true,
     -- Token is loaded from ~/.hammerspoon/display-profiles-secrets.lua
     statuses = {
-        work = { text = "", emoji = "", expiration = nil, presence = "auto" },  -- clears status, sets active
+        work = { text = "", emoji = "", expiration = nil, presence = "auto" },
         home = { text = "Working from home", emoji = ":house:", expiration = nil },
-        meeting = { text = "In a meeting", emoji = ":calendar:", expiration = nil },
+        meeting = {
+            text = {"In a meeting...", "Syncing with humans...", "Currently in a meeting..."},  -- random
+            emoji = {":calendar-fire:", ":spiral_calendar_pad:", ":waiting-patiently:"},  -- random
+            expiration = nil,
+            presence = "away"
+        },
         eod = {
             text = "Offline",
-            emoji = {":night_with_stars:", ":no_entry:", ":bed:", ":crescent_moon:"},  -- random selection
+            emoji = {":night_with_stars:", ":no_entry:", ":bed:", ":crescent_moon:"},
             expiration = nil,
+            presence = "away"
+        },
+        walk = {
+            text = "Taking a walk",
+            emoji = ":walking:",
+            expirationMinutes = 30,  -- auto-clears after 30 minutes
+            presence = "away"
+        },
+        lunch = {
+            text = "Out to lunch",
+            emoji = {":pizza:", ":hamburger:", ":taco:", ":ramen:"},  -- random
+            expirationMinutes = 60,
             presence = "away"
         }
     }
 }
 
 -- Layouts (app name → display & position)
-config.workLayout = {
-    ["App Name"] = {display = 3, position = "maximized"},
-    -- ...
-}
-
+config.workLayout = { ... }
 config.homeLayout = { ... }
 config.meetingLayout = { ... }
 
@@ -590,10 +708,10 @@ end
 
 ### Potential Features
 
-1. **Auto-arrange on plug-in**
-   - Detect when displays increase
-   - Automatically trigger work/home based on display count
-   - Challenge: How to distinguish between work (3) and temporary 3rd display?
+1. ~~**Auto-arrange on plug-in**~~ ✅ IMPLEMENTED
+   - Detect when displays increase to 3
+   - Automatically trigger Work mode
+   - Configurable morning-only window
 
 2. **Time-based auto-switching**
    - Morning: Auto-trigger work mode
@@ -703,43 +821,96 @@ end
 ### Raycast command not found
 
 **Check**:
-1. Scripts are in `~/Library/Application Support/raycast/scripts/`
+1. Scripts are in user's Raycast scripts directory (`~/bin/raycast/`)
 2. Scripts are executable (`chmod +x *.sh`)
 3. Raycast Script Commands is enabled
 4. Reload Script Commands in Raycast settings
 
+### Auto-Work doesn't trigger on morning plug-in
+
+**Symptoms**: You plug into dock in the morning but Work mode doesn't auto-trigger.
+
+**Root Cause**: With FileVault enabled, after overnight sleep/hibernate:
+1. Mac hibernates to save power
+2. FileVault locks the drive
+3. When you open the lid, Hammerspoon isn't running yet
+4. By the time Hammerspoon loads, the `systemDidWake` event has passed
+
+**Solution** (implemented):
+- Startup check detects 3 displays on Hammerspoon load
+- Multiple wake events watched (systemDidWake, screensDidWake, screenIsUnlocked)
+- 30-second debounce prevents duplicate triggers
+
+**Check**:
+1. Look for "Startup check: 3 displays detected" in Hammerspoon console
+2. Look for "Wake watcher: ENABLED" on startup
+3. Verify `config.autoWorkOnPlug = true`
+
+**References**:
+- [Hammerspoon issue #520](https://github.com/Hammerspoon/hammerspoon/issues/520) - hibernate/FileVault issues
+- [Hammerspoon issue #3178](https://github.com/Hammerspoon/hammerspoon/issues/3178) - caffeinate watcher reliability
+
+### Changes not taking effect
+
+**Cause**: Hammerspoon runs code from memory. Editing files doesn't automatically reload.
+
+**Solution**: After copying files to `~/.hammerspoon/`, reload Hammerspoon:
+
+```bash
+# Via CLI (used by Claude Code after updates)
+/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "hs.reload()"
+
+# Or: Click Hammerspoon menubar icon → Reload Config
+```
+
+**Development workflow**:
+1. Edit files in `work-productivity/hammerspoon/`
+2. Copy to `~/.hammerspoon/`
+3. Run reload command
+4. Test changes
+5. Commit when working
+
 ## Git History
 
-### Commit 1: Add Hammerspoon + Raycast display arrangement system
-- Core functionality
-- Work/home/EOD modes
-- Window arrangement logic
-- Raycast integration
-- Basic documentation
+### Recent Commits (newest first)
 
-### Commit 2: Add automatic EOD detection on unplug
-- Screen watcher implementation
-- Auto-consolidation on unplug
-- Configuration toggle
-- Updated documentation
+1. **baa3725**: Improve wake detection for auto-work trigger
+   - Added startup check for hibernate/FileVault scenario
+   - Watch multiple wake events (systemDidWake, screensDidWake, screenIsUnlocked)
+   - Added 30-second debounce to prevent duplicate triggers
 
-### Commit 3: Add Slack integration and Meeting mode
-- Slack API integration
-- Meeting mode implementation
-- Meeting notes app foreground activation
-- Comprehensive Slack configuration
-- Full documentation update
+2. **e1cf10c**: Add delay before "Safe to unplug" notification in EOD flow
+   - Shows "Ejecting disks..." immediately
+   - Waits 10 seconds before "Safe to unplug!" notification
 
-### Session 4: Enhanced Slack integration and custom window positions
-- Fixed Slack API JSON format (must wrap profile in `{profile: {...}}`)
-- Added presence/away status support via `users.setPresence` API
-- Added random emoji selection from array for EOD status
-- Added custom pixel-based window positioning support
-- Configured work layout with exact Slack, Teams, Outlook positions
-- Changed EOD disk ejection to use Raycast "eject all disks" deep link
-- Fixed app finding with exact match and allWindows method check
-- Documented user's 3-display configuration (laptop + 2 Dell monitors)
-- Added `users:write` scope requirement for presence API
+3. **c69e353**: Add wake watcher to trigger Work setup when waking while docked
+   - Initial wake watcher implementation using systemDidWake
+
+4. **9e038de**: Add automatic Work setup when plugging into 3-display dock
+   - Screen watcher detects display increase to 3
+   - 3-second delay for DisplayLink to stabilize
+   - Configurable morning-only mode
+   - Slack retry with exponential backoff
+
+5. **15e6fb9**: Prevent system sleep during Walk/Lunch to allow Time Machine backups
+   - Caffeinate assertions keep system awake while screen is locked
+
+6. **83aa617**: Add meeting mode config and fix presence restoration
+   - Meeting mode with Apple Notes
+   - Random status text/emoji selection
+   - Presence restoration timers for Walk/Lunch
+
+7. **e06ec48**: Add walk/lunch modes, enhance Slack integration
+   - Walk mode (30 min) and Lunch mode (1 hour)
+   - Screen lock after status set
+   - Custom window positioning support
+
+### Earlier History
+
+- **Commit 1**: Core Hammerspoon + Raycast display arrangement system
+- **Commit 2**: Automatic EOD detection on unplug (screen watcher)
+- **Commit 3**: Slack integration and Meeting mode
+- **Session 4**: Enhanced Slack integration, custom window positions, presence API
 
 ## User's Display Configuration
 
@@ -804,21 +975,47 @@ This is preferred over Hammerspoon's AppleScript disk ejection because:
 
 ### Questions for future development:
 
-1. Does the user want auto-arrangement when plugging in?
+1. ~~Does the user want auto-arrangement when plugging in?~~ ✅ Implemented
 2. Should we add more display modes (e.g., presentation, focus)?
 3. Are there other integrations needed (Calendar, Teams, etc.)?
 4. Should we add window state backup/restore?
 5. Is there a need for multiple profiles per mode?
 
+## Known Issues and Workarounds
+
+### FileVault/Hibernate Wake Detection
+
+**Issue**: After overnight sleep with FileVault, `systemDidWake` event doesn't fire because Hammerspoon isn't running when the Mac actually wakes - it loads after the drive is unlocked.
+
+**Workaround**: Startup check detects 3 displays on Hammerspoon load and triggers auto-work. Multiple wake events are watched as fallback.
+
+### Hammerspoon Config Changes Require Reload
+
+**Issue**: Editing `~/.hammerspoon/init.lua` doesn't automatically reload the config.
+
+**Workaround**: Run `hs -c "hs.reload()"` after making changes, or use Hammerspoon menubar → Reload Config.
+
+### Slack Status Empty String Clearing
+
+**Issue**: Setting status to empty string (`text = ""`, `emoji = ""`) should clear status, but occasionally doesn't work after extended Hammerspoon sessions.
+
+**Workaround**: Reload Hammerspoon to reset state.
+
 ## Resources
 
 - **Hammerspoon API Docs**: https://www.hammerspoon.org/docs/
 - **Hammerspoon Getting Started**: https://www.hammerspoon.org/go/
+- **Hammerspoon Caffeinate Watcher**: https://www.hammerspoon.org/docs/hs.caffeinate.watcher.html
 - **Raycast Script Commands**: https://github.com/raycast/script-commands
 - **Raycast Deep Links**: https://developers.raycast.com/api-reference/deeplinks
 - **Slack API - User Profile**: https://api.slack.com/methods/users.profile.set
 - **Slack API - User Presence**: https://api.slack.com/methods/users.setPresence
 - **Slack API - Token Types**: https://api.slack.com/authentication/token-types
+
+### Hammerspoon Issue References
+
+- [Issue #520](https://github.com/Hammerspoon/hammerspoon/issues/520) - Screen watcher not triggered after hibernate (FileVault)
+- [Issue #3178](https://github.com/Hammerspoon/hammerspoon/issues/3178) - Caffeinate watcher stops working after extended periods
 
 ## Contact & Support
 
