@@ -1,6 +1,13 @@
 -- Display Arrangement Manager for Hammerspoon
 -- Manages window arrangements across multiple display configurations
 
+-- Record startup timestamp for diagnostics
+local startupTimestamp = os.date("%Y-%m-%d %H:%M:%S")
+local startupTime = os.time()
+print(string.format("[DisplayManager] ========================================"))
+print(string.format("[DisplayManager] Hammerspoon loaded at: %s", startupTimestamp))
+print(string.format("[DisplayManager] ========================================"))
+
 -- Load user configuration
 local userConfig = require("display-profiles")
 
@@ -764,6 +771,26 @@ local function checkAndTriggerAutoWork(source)
 end
 
 local function handleWakeEvent(event)
+    -- Map event codes to names for diagnostic logging (built lazily to avoid load-time errors)
+    local caffeinateEventNames = {
+        [hs.caffeinate.watcher.systemDidWake] = "systemDidWake",
+        [hs.caffeinate.watcher.systemWillSleep] = "systemWillSleep",
+        [hs.caffeinate.watcher.systemWillPowerOff] = "systemWillPowerOff",
+        [hs.caffeinate.watcher.screensDidSleep] = "screensDidSleep",
+        [hs.caffeinate.watcher.screensDidWake] = "screensDidWake",
+        [hs.caffeinate.watcher.sessionDidResignActive] = "sessionDidResignActive",
+        [hs.caffeinate.watcher.sessionDidBecomeActive] = "sessionDidBecomeActive",
+        [hs.caffeinate.watcher.screensaverDidStart] = "screensaverDidStart",
+        [hs.caffeinate.watcher.screensaverWillStop] = "screensaverWillStop",
+        [hs.caffeinate.watcher.screensaverDidStop] = "screensaverDidStop",
+        [hs.caffeinate.watcher.screenIsLocked] = "screenIsLocked",
+        [hs.caffeinate.watcher.screenIsUnlocked] = "screenIsUnlocked",
+    }
+
+    -- Log ALL caffeinate events for diagnostics
+    local eventNameForLog = caffeinateEventNames[event] or string.format("unknown(%d)", event)
+    log(string.format("Caffeinate event: %s (loaded at %s)", eventNameForLog, startupTimestamp))
+
     -- Handle multiple wake-related events for better coverage
     -- systemDidWake: Standard wake from sleep
     -- screensDidWake: Displays woke up (may fire when systemDidWake doesn't)
@@ -779,7 +806,7 @@ local function handleWakeEvent(event)
     end
 
     if eventName then
-        log(string.format("Wake event: %s", eventName))
+        log(string.format("Processing wake trigger: %s", eventName))
 
         -- Delay to let displays and network stabilize after wake
         hs.timer.doAfter(5, function()
@@ -797,6 +824,23 @@ end
 
 -- Set up CLI for Raycast integration
 hs.ipc.cliInstall()
+
+-- Diagnostic function: call from console with diagnosticStatus()
+function diagnosticStatus()
+    log("========== DIAGNOSTIC STATUS ==========")
+    log(string.format("Hammerspoon loaded at: %s", startupTimestamp))
+    log(string.format("Current time: %s", os.date("%Y-%m-%d %H:%M:%S")))
+    log(string.format("Uptime: %d seconds", os.time() - startupTime))
+    log(string.format("Display count: %d", getDisplayCount()))
+    log(string.format("Screen watcher active: %s", screenWatcher and "YES" or "NO"))
+    log(string.format("Wake watcher active: %s", wakeWatcher and "YES" or "NO"))
+    log(string.format("Auto-work enabled: %s", userConfig.autoWorkOnPlug and "YES" or "NO"))
+    log(string.format("Morning-only mode: %s", userConfig.morningOnlyAutoWork and "YES" or "NO"))
+    if userConfig.morningOnlyAutoWork then
+        log(string.format("Currently in morning window: %s", isWithinMorningWindow() and "YES" or "NO"))
+    end
+    log("========================================")
+end
 
 -- Show notification on load
 local features = {}
