@@ -771,24 +771,27 @@ local function checkAndTriggerAutoWork(source)
 end
 
 local function handleWakeEvent(event)
-    -- Map event codes to names for diagnostic logging (built lazily to avoid load-time errors)
-    local caffeinateEventNames = {
-        [hs.caffeinate.watcher.systemDidWake] = "systemDidWake",
-        [hs.caffeinate.watcher.systemWillSleep] = "systemWillSleep",
-        [hs.caffeinate.watcher.systemWillPowerOff] = "systemWillPowerOff",
-        [hs.caffeinate.watcher.screensDidSleep] = "screensDidSleep",
-        [hs.caffeinate.watcher.screensDidWake] = "screensDidWake",
-        [hs.caffeinate.watcher.sessionDidResignActive] = "sessionDidResignActive",
-        [hs.caffeinate.watcher.sessionDidBecomeActive] = "sessionDidBecomeActive",
-        [hs.caffeinate.watcher.screensaverDidStart] = "screensaverDidStart",
-        [hs.caffeinate.watcher.screensaverWillStop] = "screensaverWillStop",
-        [hs.caffeinate.watcher.screensaverDidStop] = "screensaverDidStop",
-        [hs.caffeinate.watcher.screenIsLocked] = "screenIsLocked",
-        [hs.caffeinate.watcher.screenIsUnlocked] = "screenIsUnlocked",
-    }
+    -- Build event name lookup safely (some constants may be nil in older Hammerspoon versions)
+    local function getEventName(e)
+        local w = hs.caffeinate.watcher
+        if e == w.systemDidWake then return "systemDidWake"
+        elseif e == w.systemWillSleep then return "systemWillSleep"
+        elseif e == w.systemWillPowerOff then return "systemWillPowerOff"
+        elseif e == w.screensDidSleep then return "screensDidSleep"
+        elseif e == w.screensDidWake then return "screensDidWake"
+        elseif e == w.sessionDidResignActive then return "sessionDidResignActive"
+        elseif e == w.sessionDidBecomeActive then return "sessionDidBecomeActive"
+        elseif e == w.screensaverDidStart then return "screensaverDidStart"
+        elseif e == w.screensaverWillStop then return "screensaverWillStop"
+        elseif e == w.screensaverDidStop then return "screensaverDidStop"
+        elseif e == w.screenIsLocked then return "screenIsLocked"
+        elseif e == w.screenIsUnlocked then return "screenIsUnlocked"
+        else return string.format("unknown(%s)", tostring(e))
+        end
+    end
 
     -- Log ALL caffeinate events for diagnostics
-    local eventNameForLog = caffeinateEventNames[event] or string.format("unknown(%d)", event)
+    local eventNameForLog = getEventName(event)
     log(string.format("Caffeinate event: %s (loaded at %s)", eventNameForLog, startupTimestamp))
 
     -- Handle multiple wake-related events for better coverage
