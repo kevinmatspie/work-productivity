@@ -640,6 +640,9 @@ end
 local screenWatcher = nil
 local previousDisplayCount = getDisplayCount()
 
+-- Shared debounce for auto-work triggers (prevents both screen watcher and wake watcher from firing)
+local lastAutoWorkTrigger = 0
+
 -- Auto-work function that arranges windows first, then updates Slack with retry
 local function autoArrangeForWork()
     log("Auto-arranging for work setup (3 displays)...")
@@ -705,12 +708,19 @@ local function handleDisplayChange()
             end
 
             if shouldTrigger then
-                log("Plugging into 3 displays detected - triggering automatic Work setup")
+                -- Check shared debounce to avoid duplicate triggers with wake watcher
+                local now = os.time()
+                if now - lastAutoWorkTrigger < 30 then
+                    log(string.format("Skipping screen watcher auto-work - already triggered %d seconds ago", now - lastAutoWorkTrigger))
+                else
+                    log("Plugging into 3 displays detected - triggering automatic Work setup")
+                    lastAutoWorkTrigger = now
 
-                -- 3 second delay for DisplayLink and network to stabilize
-                hs.timer.doAfter(3, function()
-                    autoArrangeForWork()
-                end)
+                    -- 3 second delay for DisplayLink and network to stabilize
+                    hs.timer.doAfter(3, function()
+                        autoArrangeForWork()
+                    end)
+                end
             end
         end
     end
@@ -741,16 +751,14 @@ end
 -- Handles the case where Mac wakes from sleep already connected to dock
 -- Watches multiple events because systemDidWake may not fire after hibernate (FileVault)
 local wakeWatcher = nil
-local lastWakeCheck = 0  -- Prevent duplicate triggers within short time
 
 local function checkAndTriggerAutoWork(source)
-    -- Debounce: Don't trigger if we just checked within the last 30 seconds
+    -- Use shared debounce: Don't trigger if screen watcher or wake watcher already triggered recently
     local now = os.time()
-    if now - lastWakeCheck < 30 then
-        log(string.format("Skipping %s check - already checked %d seconds ago", source, now - lastWakeCheck))
+    if now - lastAutoWorkTrigger < 30 then
+        log(string.format("Skipping %s check - already triggered %d seconds ago", source, now - lastAutoWorkTrigger))
         return
     end
-    lastWakeCheck = now
 
     -- Only proceed if auto-work is enabled
     if not userConfig.autoWorkOnPlug then
@@ -774,6 +782,7 @@ local function checkAndTriggerAutoWork(source)
 
         if shouldTrigger then
             log(string.format("%s with 3 displays - triggering automatic Work setup", source))
+            lastAutoWorkTrigger = now
             autoArrangeForWork()
         end
     else

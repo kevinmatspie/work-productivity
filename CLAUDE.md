@@ -851,6 +851,8 @@ end
 2. Look for "Wake watcher: ENABLED" on startup
 3. Verify `config.autoWorkOnPlug = true`
 
+**Note**: Screen watcher and wake watcher share a 30-second debounce to prevent duplicate triggers when both fire simultaneously (e.g., waking from sleep while docked).
+
 **References**:
 - [Hammerspoon issue #520](https://github.com/Hammerspoon/hammerspoon/issues/520) - hibernate/FileVault issues
 - [Hammerspoon issue #3178](https://github.com/Hammerspoon/hammerspoon/issues/3178) - caffeinate watcher reliability
