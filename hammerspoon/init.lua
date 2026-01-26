@@ -152,8 +152,12 @@ local function arrangeWindows(layout)
 
         if app and app.allWindows then
             local windows = app:allWindows()
+            local windowCount = #windows
+            local standardVisible = 0
+
             for _, window in ipairs(windows) do
                 if window:isStandard() and window:isVisible() then
+                    standardVisible = standardVisible + 1
                     local success = moveWindowToScreen(window, config.display, config.position)
                     if success then
                         moved = moved + 1
@@ -163,6 +167,13 @@ local function arrangeWindows(layout)
                         log(string.format("Failed to move %s", appName))
                     end
                 end
+            end
+
+            -- Log if app has windows but none were movable
+            if windowCount > 0 and standardVisible == 0 then
+                log(string.format("App %s has %d windows but none are standard+visible", appName, windowCount))
+            elseif windowCount == 0 then
+                log(string.format("App %s is running but has no windows", appName))
             end
         else
             log(string.format("App not running: %s", appName))

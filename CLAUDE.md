@@ -788,6 +788,11 @@ end
 4. Hammerspoon has Accessibility permissions
 5. Check Hammerspoon Console for errors
 
+**New diagnostic messages** (added 2026-01-26):
+- `App not running: {name}` - App isn't launched
+- `App {name} is running but has no windows` - App running but no windows created yet
+- `App {name} has N windows but none are standard+visible` - Windows exist but are minimized or non-standard
+
 ### Displays not detected correctly
 
 **Check**:
@@ -874,12 +879,21 @@ end
 
 ### Recent Commits (newest first)
 
-1. **baa3725**: Improve wake detection for auto-work trigger
+1. **a972336**: Fix caffeinate watcher crash on unknown event codes
+   - Changed table-based lookup to if/elseif chain to handle nil constants
+   - Fixes crash when macOS sends event codes not in Hammerspoon's constants
+
+2. **1c82684**: Add diagnostic logging to troubleshoot wake detection issue
+   - Startup timestamp banner in console
+   - Log all caffeinate events with load timestamp
+   - Added `diagnosticStatus()` function for debugging
+
+3. **baa3725**: Improve wake detection for auto-work trigger
    - Added startup check for hibernate/FileVault scenario
    - Watch multiple wake events (systemDidWake, screensDidWake, screenIsUnlocked)
    - Added 30-second debounce to prevent duplicate triggers
 
-2. **e1cf10c**: Add delay before "Safe to unplug" notification in EOD flow
+4. **e1cf10c**: Add delay before "Safe to unplug" notification in EOD flow
    - Shows "Ejecting disks..." immediately
    - Waits 10 seconds before "Safe to unplug!" notification
 
@@ -1000,6 +1014,29 @@ This is preferred over Hammerspoon's AppleScript disk ejection because:
 **Issue**: Setting status to empty string (`text = ""`, `emoji = ""`) should clear status, but occasionally doesn't work after extended Hammerspoon sessions.
 
 **Workaround**: Reload Hammerspoon to reset state.
+
+### Caffeinate Watcher Constants
+
+**Issue**: Some `hs.caffeinate.watcher` constants are `nil` on certain macOS/Hammerspoon versions:
+- `screenIsLocked` and `screenIsUnlocked` are `nil` on some systems
+- macOS may send event codes (e.g., 11) that have no Hammerspoon constant
+
+**Workaround**: Code uses if/elseif chain instead of table lookup to safely handle nil comparisons. Unknown events are logged as `unknown(N)` for diagnostics.
+
+### Auto-Work Triggers But Moves 0 Windows
+
+**Issue**: Auto-work detects 3 displays and triggers, but `Work arrangement complete: 0 moved, 0 failed`.
+
+**Likely Causes**:
+1. Apps not fully launched yet when arrangement runs (common after login)
+2. Apps running but windows not yet created/visible
+
+**Diagnostics**: Check console for new messages:
+- `App not running: {name}`
+- `App {name} is running but has no windows`
+- `App {name} has N windows but none are standard+visible`
+
+**Potential Solution**: Increase delay before auto-arrangement, or add app launching to work setup.
 
 ## Resources
 
