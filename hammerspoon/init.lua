@@ -491,9 +491,12 @@ function arrangeForEOD()
     -- end
 
     -- Set Slack status if configured
+    -- Use retry variant: EOD runs at unplug, when the network is renegotiating and
+    -- a single async POST often fails with "HTTP error: -1" (no response). Retry with
+    -- backoff gives the connection time to come back, matching autoArrangeForWork().
     if userConfig.slackIntegration and userConfig.slackIntegration.statuses and userConfig.slackIntegration.statuses.eod then
         local status = userConfig.slackIntegration.statuses.eod
-        setSlackStatus(status.text, status.emoji, status.expiration, status.presence)
+        setSlackStatusWithRetry(status.text, status.emoji, status.expiration, status.presence)
     end
 
     -- Show initial notification, then delay before "Safe to unplug"
