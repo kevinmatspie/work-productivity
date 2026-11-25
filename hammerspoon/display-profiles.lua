@@ -84,14 +84,18 @@ config.meetingNotesApp = "Notes"  -- Apple Notes
 -- Work Layout (3 displays)
 -- Display numbering (sorted left to right by x position):
 --   1 = Built-in Retina Display (laptop, x:-1470)
---   2 = DELL P2217H (1) (center, x:0)
---   3 = DELL P2217H (2) (right, portrait, x:1920)
+--   2 = DELL S2725QS (center, primary, x:0, 3008x1692 scaled)
+--   3 = DELL P2217H (right, portrait, x:3008, frame y:-151, 1080x1890)
 -- Position options: "maximized", "left-half", "right-half", "top-half", "bottom-half", "center"
 --   or custom: {x = ..., y = ..., w = ..., h = ...}
+--   Custom frames:
+--     relative = true -> x/y are offsets from that display's usable top-left
+--                        corner (preferred: survives monitor swaps/rearranging)
+--     omitted         -> absolute global coordinates (break when displays move)
 config.workLayout = {
     -- Communication apps on right monitor (portrait, display 3) - stacked vertically
-    ["Slack"] = {display = 3, position = {x = 1926, y = -191, w = 1066, h = 1043}},
-    ["Microsoft Teams"] = {display = 3, position = {x = 1926, y = 867, w = 1066, h = 818}},
+    ["Slack"] = {display = 3, position = {relative = true, x = 6, y = 18, w = 1066, h = 1043}},
+    ["Microsoft Teams"] = {display = 3, position = {relative = true, x = 6, y = 1062, w = 1066, h = 818}},
 
     -- Email on laptop (display 1)
     ["Microsoft Outlook"] = {display = 1, position = "maximized"},

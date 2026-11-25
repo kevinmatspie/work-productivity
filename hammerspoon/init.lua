@@ -1,3 +1,6 @@
+-- Command line support (required for the `hs` CLI used by Raycast scripts)
+require("hs.ipc")
+
 -- Display Arrangement Manager for Hammerspoon
 -- Manages window arrangements across multiple display configurations
 
@@ -131,11 +134,30 @@ local function moveWindowToScreen(window, screenIndex, position)
             windowFrame.y = screenFrame.y + (screenFrame.h - windowFrame.h) / 2
             window:setFrame(windowFrame)
         elseif type(position) == "table" then
-            -- Custom frame: {x, y, w, h} as absolute coordinates
-            windowFrame.x = position.x or position[1]
-            windowFrame.y = position.y or position[2]
-            windowFrame.w = position.w or position[3]
-            windowFrame.h = position.h or position[4]
+            -- Custom frame: {x, y, w, h}
+            --   relative = true: x/y are offsets from the target screen's usable
+            --     top-left corner, so the layout survives monitor swaps and
+            --     Displays-arrangement changes
+            --   otherwise: absolute global coordinates (legacy)
+            local x = position.x or position[1]
+            local y = position.y or position[2]
+            local w = position.w or position[3]
+            local h = position.h or position[4]
+            if not (x and y and w and h) then
+                log("Custom position missing x/y/w/h - leaving window on screen unsized")
+                return true
+            end
+            if position.relative then
+                x = screenFrame.x + x
+                y = screenFrame.y + y
+            end
+            windowFrame.x, windowFrame.y, windowFrame.w, windowFrame.h = x, y, w, h
+            if x < screenFrame.x or y < screenFrame.y or
+               x + w > screenFrame.x + screenFrame.w or
+               y + h > screenFrame.y + screenFrame.h then
+                log(string.format("WARNING: custom frame x=%.0f y=%.0f w=%.0f h=%.0f extends past screen %d (%s) - check display-profiles.lua",
+                    x, y, w, h, screenIndex, screen:name()))
+            end
             window:setFrame(windowFrame)
         end
     end
@@ -887,4 +909,11 @@ if userConfig.autoWorkOnPlug then
     hs.timer.doAfter(3, function()
         checkAndTriggerAutoWork("Startup check")
     end)
+end
+
+-- Optional: clip-toast (from cc-toolkit, lives only in ~/.hammerspoon, not this repo)
+-- Loaded if present; silently skipped otherwise
+local clipToastLoaded, clipToastErr = pcall(require, "clip-toast")
+if not clipToastLoaded and not tostring(clipToastErr):find("not found") then
+    log("clip-toast failed to load: " .. tostring(clipToastErr))
 end

@@ -364,13 +364,13 @@ You can create additional profiles for other scenarios:
 
 ### Position Options
 
-Custom pixel positions are supported directly in the config:
+Custom pixel positions are supported directly in the config. With `relative = true`, `x`/`y` are offsets from the display's usable top-left corner (below the menu bar), so the layout keeps working if you swap monitors or rearrange them in System Settings → Displays. Without `relative`, `x`/`y` are absolute global coordinates, which shift whenever displays move.
 
 ```lua
 config.workLayout = {
     -- Stack windows vertically on portrait monitor
-    ["Slack"] = {display = 3, position = {x = 1926, y = -191, w = 1066, h = 1043}},
-    ["Microsoft Teams"] = {display = 3, position = {x = 1926, y = 867, w = 1066, h = 818}},
+    ["Slack"] = {display = 3, position = {relative = true, x = 6, y = 18, w = 1066, h = 1043}},
+    ["Microsoft Teams"] = {display = 3, position = {relative = true, x = 6, y = 1062, w = 1066, h = 818}},
 }
 ```
 

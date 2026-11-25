@@ -155,6 +155,8 @@ User's Raycast scripts directory:
    - Moves window to specified display
    - Applies positioning: "maximized", "left-half", "right-half", "top-half", "bottom-half", "center"
    - Also supports custom frame: `{x = ..., y = ..., w = ..., h = ...}` for exact pixel positioning
+   - Custom frame with `relative = true`: x/y are offsets from the target screen's usable top-left (`screen:frame()`), so layouts survive monitor swaps; without it, x/y are absolute global coordinates (legacy)
+   - Logs a WARNING if a custom frame extends past the target screen's usable area
    - Position "maximized" uses `window:maximize()` - fills screen but NOT macOS full-screen mode
    - Returns success boolean
 
@@ -384,10 +386,10 @@ return config
     position = "maximized"  -- or "left-half", "right-half", etc.
 }
 
--- Custom frame position (exact pixel coordinates)
+-- Custom frame position (pixel offsets from display 3's usable top-left corner)
 ["Slack"] = {
     display = 3,
-    position = {x = 1926, y = -191, w = 1066, h = 1043}
+    position = {relative = true, x = 6, y = 18, w = 1066, h = 1043}
 }
 ```
 
@@ -396,7 +398,8 @@ return config
 - Display numbering is spatial (sorted left-to-right by x-coordinate)
 - Position `nil` means just move to display, don't resize
 - Position "maximized" does NOT enter macOS full-screen mode (just resizes window)
-- Custom frame positions use absolute pixel coordinates (useful for stacking windows)
+- Custom frame positions are pixel-exact (useful for stacking windows). Use `relative = true` so they're offsets from the display's usable top-left; without it they're absolute global coordinates, which broke when the center monitor was swapped (Nov 2026)
+- Relative offsets survive monitor moves/swaps but not a resolution change on the target display itself (w/h are still pixels)
 
 ### Secrets Management
 
@@ -654,10 +657,14 @@ local app = hs.application.find("Slack")
 if app then
     for i, win in ipairs(app:allWindows()) do
         local f = win:frame()
-        print(string.format("Window %d: x=%d, y=%d, w=%d, h=%d", i, f.x, f.y, f.w, f.h))
+        local s = win:screen():frame()
+        print(string.format("Window %d on %s: relative x=%d, y=%d, w=%d, h=%d (absolute x=%d, y=%d)",
+            i, win:screen():name(), f.x - s.x, f.y - s.y, f.w, f.h, f.x, f.y))
     end
 end
 ```
+
+Use the `relative` x/y with `relative = true` in `display-profiles.lua`.
 
 ### Getting Slack Token
 
@@ -932,15 +939,15 @@ end
 
 **Work Setup (3 displays, sorted by x-coordinate)**:
 - Display 1: Built-in Retina Display (laptop, x:-1470) - leftmost
-- Display 2: DELL P2217H (1) (center, x:0) - center monitor
-- Display 3: DELL P2217H (2) (right, x:1920) - portrait mode, rightmost
+- Display 2: DELL S2725QS (center, x:0, 3008x1692 scaled, primary) - center monitor (27" 4K, replaced a DELL P2217H in Nov 2026)
+- Display 3: DELL P2217H (right, x:3008, frame y:-151, 1080x1890) - portrait mode, rightmost
 
 **Current Work Layout**:
 ```lua
 config.workLayout = {
     -- Communication apps on right monitor (portrait, display 3) - stacked vertically
-    ["Slack"] = {display = 3, position = {x = 1926, y = -191, w = 1066, h = 1043}},
-    ["Microsoft Teams"] = {display = 3, position = {x = 1926, y = 867, w = 1066, h = 818}},
+    ["Slack"] = {display = 3, position = {relative = true, x = 6, y = 18, w = 1066, h = 1043}},
+    ["Microsoft Teams"] = {display = 3, position = {relative = true, x = 6, y = 1062, w = 1066, h = 818}},
 
     -- Email on laptop (display 1)
     ["Microsoft Outlook"] = {display = 1, position = "maximized"},
