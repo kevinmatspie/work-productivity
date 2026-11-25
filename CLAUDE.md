@@ -551,7 +551,7 @@ Scripts must be:
 - User declined to disable SIP for security reasons
 - Hammerspoon can handle physical display management well
 - macOS naturally remembers which apps belong to which Spaces after initial manual setup
-- Trade-off: Can't programmatically move windows between Spaces, but this is acceptable
+- Trade-off: Can't reliably move windows between Spaces programmatically (see Limitations #1), but this is acceptable
 
 ### Why "maximized" instead of full-screen?
 
@@ -594,10 +594,12 @@ Scripts must be:
 
 ## Important Limitations
 
-1. **Cannot move windows between Mission Control Spaces**
-   - Hammerspoon has no API for Space management
-   - macOS doesn't provide public APIs for this
-   - Workaround: Rely on macOS to remember Space assignments after manual setup
+1. **Cannot reliably move windows between Mission Control Spaces**
+   - Hammerspoon's `hs.spaces` module exists, built on private macOS APIs (Apple provides no public ones)
+   - **Read side works** (verified 2026-11-25 on macOS 27.2.1, Hammerspoon 1.1.1): `hs.spaces.allSpaces()`, `focusedSpace()`, `windowSpaces(win)`
+   - **Write side is broken on macOS 27**: `moveWindowToSpace` returns true without moving the window ([#3903](https://github.com/Hammerspoon/hammerspoon/issues/3903)); macOS 27 moved Mission Control's accessibility tree from the Dock to WindowManager, likely affecting `gotoSpace` too ([#3897](https://github.com/Hammerspoon/hammerspoon/issues/3897)). Fix [PR #3889](https://github.com/Hammerspoon/hammerspoon/pull/3889) targets Tahoe (26) and was unmerged as of 2026-11-25
+   - Not yet tested empirically on this machine. If ever used, verify the move afterwards with `windowSpaces()` rather than trusting the return value
+   - Workaround: Rely on macOS to remember Space assignments (Dock icon → Options → Assign To)
 
 2. **Some apps don't support window management**
    - Full-screen apps (already in their own Space)
@@ -981,7 +983,7 @@ This is preferred over Hammerspoon's AppleScript disk ejection because:
    - Cannot disable SIP
    - Free version of Raycast
    - Must work within Hammerspoon's capabilities
-   - No Space management possible
+   - Spaces can be read via `hs.spaces` but not reliably changed (see Limitations #1)
 
 3. **User preferences**:
    - Wants automatic behavior where sensible

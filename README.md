@@ -261,7 +261,7 @@ Open Hammerspoon Console and type:
 
 ### Mission Control Spaces
 
-While Hammerspoon cannot move windows between Mission Control Spaces, macOS does a good job remembering window positions:
+Hammerspoon can read Spaces (`hs.spaces`) but can't reliably move windows between them: `hs.spaces.moveWindowToSpace` silently does nothing on recent macOS, including macOS 27. Fortunately, macOS does a good job remembering window positions:
 
 1. **Initial setup**: Manually arrange apps in your desired Spaces once
 2. **Let macOS remember**: macOS will remember which Space each app belongs to
@@ -378,7 +378,7 @@ You can also add new position presets by modifying the `moveWindowToScreen` func
 
 ## Limitations
 
-- **Cannot move windows between Mission Control Spaces** - This is a macOS API limitation
+- **Cannot reliably move windows between Mission Control Spaces** - macOS has no public API for it; Hammerspoon's `hs.spaces` uses private APIs that recent macOS versions keep breaking
 - **Some apps don't support window management** - Full-screen apps, system preferences, etc.
 - **Display order may vary** - Displays are ordered left-to-right by physical position
 
